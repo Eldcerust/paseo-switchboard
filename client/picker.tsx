@@ -3,7 +3,7 @@ import { useAgent, usePaseo, useRpc } from "@getpaseo/plugin/client";
 import { useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { buildTargets, defaultSelection, filterTargets, isSearching, resolveExpansion, toggleProvider, type TargetProvider } from "./targets";
 
@@ -54,8 +54,12 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
     },
   });
   const space = layout.compact ? 8 : 12;
+  const { height: windowHeight } = useWindowDimensions();
+  // Bound the list itself, not just the panel: a maxHeight on the outer view only clips the ScrollView.
+  const panelMaxHeight = Math.max(320, Math.min(layout.compact ? 520 : 640, windowHeight - 96));
+  const listMaxHeight = Math.max(140, panelMaxHeight - (layout.compact ? 200 : 220));
   const styles = {
-    root: { backgroundColor: theme.colors.surface0, gap: space, padding: space, maxHeight: layout.compact ? 520 : 640 },
+    root: { backgroundColor: theme.colors.surface0, gap: space, padding: space, maxHeight: panelMaxHeight },
     title: { color: theme.colors.foreground, fontSize: layout.compact ? 18 : 20, fontWeight: "700" as const },
     sectionLabel: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12, fontWeight: "600" as const, letterSpacing: 0.6, textTransform: "uppercase" as const },
     body: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
@@ -111,7 +115,7 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
           value={search} onChangeText={setSearch} placeholderTextColor={theme.colors.foregroundMuted} style={styles.search} />
         {searching ? link("clear-search", "Clear search", () => setSearch("")) : null}
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" style={{ flexShrink: 1 }} contentContainerStyle={{ gap: space }}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: listMaxHeight }} contentContainerStyle={{ gap: space }}>
         {query.isPending ? <Text style={styles.hint}>Loading providers...</Text> : null}
         {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
         {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
