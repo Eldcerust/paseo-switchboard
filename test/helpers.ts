@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { PaseoAgent, PaseoAgentTimelineRefetchOptions, PaseoWorkspaceAgentCreateOptions } from "@getpaseo/client";
 import type { AgentTimelineItem, PluginTimelineItem } from "@getpaseo/protocol/agent-types";
@@ -6,7 +7,8 @@ import type { ProviderSnapshot } from "../shared/catalog";
 import type { SwitchApi } from "../server/switch";
 import { FetchAgentTimelineRequestMessageSchema } from "@getpaseo/protocol/messages";
 
-const scratchRoot = path.resolve("test/.tmp");
+// Scratch dirs live outside the repository so git commands cannot discover it as a parent repo.
+const scratchRoot = path.join(tmpdir(), "paseo-switchboard-tests");
 export async function scratch(prefix: string) {
   await mkdir(scratchRoot, { recursive: true });
   return mkdtemp(path.join(scratchRoot, `${prefix}-`));
