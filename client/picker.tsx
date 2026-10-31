@@ -1,34 +1,56 @@
-import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
-import { useAgent, usePaseo, useRpc } from "@getpaseo/plugin/client";
+import type { PluginClientContext, PluginScreenProps } from "@getpaseo/plugin/client";
+import { usePaseo, useRpc } from "@getpaseo/plugin/client";
 import { useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
-import { buildTargets, defaultSelection, filterTargets, isSearching, resolveExpansion, toggleProvider, type TargetProvider } from "./targets";
+import { buildTargets, defaultSelection, filterTargets, isSearching, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
 
-export function createPicker(openScreen: PluginClientContext["openScreen"]) {
-  return function Picker(props: PluginButtonContentProps) {
-    if (props.context !== "agent") return null;
-    return <AgentPicker {...props} agentId={props.agentId} openScreen={openScreen} />;
+type PickerSource = SourceTarget & { status: string; cwd: string };
+
+// Opened from the composer pill as a screen. The host popover dismisses itself on some content
+// changes, so the picker lives in a screen and renders its own centered card instead.
+export function createPickerScreen(openScreen: PluginClientContext["openScreen"]) {
+  return function PickerScreen({ params, theme, layout }: PluginScreenProps) {
+    const agentId = params.agentId;
+    const source: PickerSource = {
+      provider: params.provider ?? "",
+      model: params.model || null,
+      currentModeId: params.currentModeId || null,
+      status: params.status ?? "idle",
+      cwd: params.cwd ?? "",
+    };
+    if (!agentId || !source.cwd) {
+      return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: theme.colors.surface0 }}>
+        <Text style={{ color: theme.colors.statusWarning }}>No agent was specified.</Text>
+      </View>;
+    }
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: layout.compact ? 12 : 24, backgroundColor: theme.colors.surface1 }}>
+        <View style={{ width: "100%", maxWidth: 440, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: theme.colors.border }}>
+          <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={() => {}} openScreen={openScreen} />
+        </View>
+      </View>
+    );
   };
 }
 
-function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButtonContentProps & {
-  agentId: string; openScreen: PluginClientContext["openScreen"];
+function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
+  agentId: string;
+  source: PickerSource;
+  theme: PluginScreenProps["theme"];
+  layout: PluginScreenProps["layout"];
+  close: () => void;
+  openScreen: PluginClientContext["openScreen"];
 }) {
   const paseo = usePaseo();
   const toast = useToast();
   const switchAgent = useRpc(switchRpc);
-  const source = useAgent(agentId, (agent) => ({ provider: agent.provider, model: agent.model,
-    currentModeId: agent.currentModeId, status: agent.status, cwd: agent.cwd }));
-  const query = useQuery({ queryKey: ["switchboard-providers", agentId, source?.cwd], enabled: Boolean(source),
-    queryFn: () => {
-      if (!source) throw new Error("The source agent is no longer available.");
-      return paseo.providers.snapshot({ cwd: source.cwd });
-    }, staleTime: 0 });
+  const query = useQuery({ queryKey: ["switchboard-providers", agentId, source.cwd], enabled: Boolean(source.cwd),
+    queryFn: () => paseo.providers.snapshot({ cwd: source.cwd }), staleTime: 0 });
   useEffect(() => paseo.providers.subscribe(() => { void query.refetch(); }), [paseo, query.refetch]);
-  const providers = query.data ? buildTargets(query.data, source ?? undefined) : [];
+  const providers = query.data ? buildTargets(query.data, source) : [];
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<TargetProvider["id"]> | null>(null);
   // Capture the first non-empty catalog once, including when it arrives after the initial render.
@@ -36,6 +58,7 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
   if (next !== expanded) setExpanded(next);
   const searching = isSearching(search);
   const visibleProviders = filterTargets(providers, search);
+  const noneExpanded = !searching && visibleProviders.length > 0 && !visibleProviders.some((entry) => expanded?.has(entry.id));
   const [selection, setSelection] = useState<{ provider: string; model: string; thinkingOptionId?: string; modeId?: string }>();
   const provider = providers.find((entry) => entry.id === selection?.provider);
   const model = provider?.models.find((entry) => entry.id === selection?.model);
@@ -54,12 +77,15 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
     },
   });
   const space = layout.compact ? 8 : 12;
-  const { height: windowHeight } = useWindowDimensions();
-  // Bound the list itself, not just the panel: a maxHeight on the outer view only clips the ScrollView.
-  const panelMaxHeight = Math.max(320, Math.min(layout.compact ? 520 : 640, windowHeight - 96));
-  const listMaxHeight = Math.max(140, panelMaxHeight - (layout.compact ? 200 : 220));
+  // Reserve the host's 12px content padding, 4px menu padding and 1px border on each side.
+  // Measure both chrome groups so wrapped warnings/errors leave the list only the remaining space.
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  // A stable body size matters: resizing the popover under the pointer makes Paseo dismiss it.
+  // Size it once from the host cap and let only the list scroll.
+  const bodyHeight = Math.max(200, Math.min(440, windowHeight - 16) - 34);
+  const bodyWidth = Math.max(240, Math.min(392, windowWidth - 80));
   const styles = {
-    root: { backgroundColor: theme.colors.surface0, gap: space, padding: space, maxHeight: panelMaxHeight },
+    root: { backgroundColor: theme.colors.surface0, gap: space, padding: space, height: bodyHeight, ...(layout.compact ? {} : { width: bodyWidth }) },
     title: { color: theme.colors.foreground, fontSize: layout.compact ? 18 : 20, fontWeight: "700" as const },
     sectionLabel: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12, fontWeight: "600" as const, letterSpacing: 0.6, textTransform: "uppercase" as const },
     body: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
@@ -105,7 +131,6 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
       <Text style={styles.linkText}>{label}</Text>
     </Pressable>
   );
-  if (!source) return <View style={styles.root}><Text style={styles.error}>The source agent is no longer available.</Text></View>;
   return (
     <View style={styles.root}>
       <Text style={styles.title}>Switch provider and model</Text>
@@ -115,7 +140,7 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
           value={search} onChangeText={setSearch} placeholderTextColor={theme.colors.foregroundMuted} style={styles.search} />
         {searching ? link("clear-search", "Clear search", () => setSearch("")) : null}
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: listMaxHeight }} contentContainerStyle={{ gap: space }}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ gap: space }}>
         {query.isPending ? <Text style={styles.hint}>Loading providers...</Text> : null}
         {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
         {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
@@ -123,6 +148,7 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
         {query.isSuccess && searching && !visibleProviders.length ? <View>
           <Text style={styles.hint}>No models match "{search}"</Text>
         </View> : null}
+        {query.isSuccess && noneExpanded ? <Text style={styles.hint}>All providers are collapsed. Expand one to choose a model.</Text> : null}
         {visibleProviders.map((entry) => {
           const isExpanded = searching || expanded?.has(entry.id) === true;
           const count = entry.models.length;
@@ -135,7 +161,7 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
               <Text style={styles.count}>{count} of {total}</Text>
             </View> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: isExpanded, disabled: mutation.isPending }}
               accessibilityLabel={`${entry.label}, ${count} ${count === 1 ? "model" : "models"}, ${isExpanded ? "expanded" : "collapsed"}`}
-              disabled={mutation.isPending} onPress={() => setExpanded((value) => toggleProvider(value ?? new Set(), entry.id))} style={styles.providerHeader}>
+              disabled={mutation.isPending} onPress={(event) => { event.stopPropagation(); setExpanded((value) => toggleProvider(value ?? new Set(), entry.id)); }} style={styles.providerHeader}>
               <Text style={styles.chevron}>{isExpanded ? "▾" : "▸"}</Text>
               <Text style={styles.provider}>{entry.label}</Text>
               <View style={{ flex: 1 }} />

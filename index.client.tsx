@@ -1,14 +1,16 @@
 import type { PluginClientContext } from "@getpaseo/plugin/client";
 import { createOpenAgentScreen } from "./client/open-agent";
+import { createPickerScreen } from "./client/picker";
 import { contributePills } from "./client/switch-pill";
 import { createSwitchedRow } from "./client/switched-row";
 import { parseSwitchArgs } from "./client/targets";
-import { OPEN_AGENT_SCREEN_ID, ROW_KIND, ROW_VERSION, switchRpc, switchedRowSchema } from "./shared/switchboard";
+import { OPEN_AGENT_SCREEN_ID, PICKER_SCREEN_ID, ROW_KIND, ROW_VERSION, switchRpc, switchedRowSchema } from "./shared/switchboard";
 
 export default function contribute(client: PluginClientContext) {
   const openScreen: PluginClientContext["openScreen"] = (input) => client.openScreen(input);
   const remove = [
     client.addScreen({ id: OPEN_AGENT_SCREEN_ID, title: "Switchboard", Component: createOpenAgentScreen() }),
+    client.addScreen({ id: PICKER_SCREEN_ID, title: "Switch agent", Component: createPickerScreen(openScreen) }),
     client.addTimelineRenderer({ kind: ROW_KIND, version: ROW_VERSION, schema: switchedRowSchema, Component: createSwitchedRow(openScreen) }),
     client.addSlashCommand({ name: "switch", description: "Switch this task to another provider and model",
       argumentHint: "<provider>/<model> [effort]", context: "agent",

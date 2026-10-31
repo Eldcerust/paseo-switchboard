@@ -4,6 +4,7 @@ import { z } from "zod";
 export const ROW_KIND = "switched";
 export const ROW_VERSION = 1;
 export const OPEN_AGENT_SCREEN_ID = "switchboard-open-agent";
+export const PICKER_SCREEN_ID = "switchboard-picker";
 export const HISTORY_ENTRIES = 2000;
 export const CONVERSATION_CHARS = 60_000;
 export const SWITCH_USAGE = "Usage: /switch <provider>/<model> [effort]";

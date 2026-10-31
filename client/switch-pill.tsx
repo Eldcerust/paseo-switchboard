@@ -1,21 +1,24 @@
 import type { PaseoAgent } from "@getpaseo/client";
 import type { PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
-import { isSubagent } from "../shared/switchboard";
-import { createPicker } from "./picker";
+import { PICKER_SCREEN_ID, isSubagent } from "../shared/switchboard";
 
 export function contributePills(client: PluginClientContext) {
   const lifetime = new AbortController();
   const pills = new Map<string, { workspaceId: string; registration: PluginButtonRegistration }>();
-  const Content = createPicker((input) => client.openScreen(input));
   function remove(id: string) { pills.get(id)?.registration.remove(); pills.delete(id); }
   function observe(agent: PaseoAgent) {
     if (lifetime.signal.aborted) return;
-    if (!agent.workspaceId || agent.archivedAt || isSubagent(agent)) { remove(agent.id); return; }
-    if (pills.get(agent.id)?.workspaceId === agent.workspaceId) return;
+    const workspaceId = agent.workspaceId;
+    if (!workspaceId || agent.archivedAt || isSubagent(agent)) { remove(agent.id); return; }
+    if (pills.get(agent.id)?.workspaceId === workspaceId) return;
     remove(agent.id);
-    pills.set(agent.id, { workspaceId: agent.workspaceId, registration: client.addComposerPill({
-      id: "switch", workspaceId: agent.workspaceId, agentId: agent.id,
-      button: { title: "Switch", label: "Switch", icon: "Play", behavior: { kind: "popover", Content } },
+    pills.set(agent.id, { workspaceId, registration: client.addComposerPill({
+      id: "switch", workspaceId, agentId: agent.id,
+      button: { title: "Switch", label: "Switch", icon: "Play", behavior: { kind: "action",
+        onPress: () => client.openScreen({ screenId: PICKER_SCREEN_ID, params: {
+          agentId: agent.id, workspaceId, provider: agent.provider, model: agent.model ?? "",
+          currentModeId: agent.currentModeId ?? "", status: agent.status, cwd: agent.cwd,
+        } }) } },
     }) });
   }
   void client.paseo.agents.list({ subscribe: {}, signal: lifetime.signal }).then(({ subscription }) => {
