@@ -1,0 +1,9 @@
+{
+  "id": "switchboard",
+  "name": "Switchboard",
+  "description": "Switch a Paseo agent to any provider and model on demand, carrying the task over in a handoff.",
+  "media": [],
+  "requirements": {
+    "paseo": ">=0.14.0"
+  }
+}
