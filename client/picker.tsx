@@ -55,19 +55,50 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
   });
   const space = layout.compact ? 8 : 12;
   const styles = {
-    root: { backgroundColor: theme.colors.surface0, gap: space, padding: space, maxHeight: layout.compact ? 480 : 600 },
-    title: { color: theme.colors.foreground, fontSize: layout.compact ? 16 : 18, fontWeight: "600" as const },
-    label: { color: theme.colors.foregroundMuted }, text: { color: theme.colors.foreground }, error: { color: theme.colors.statusWarning },
-    choice: { padding: space, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border },
-    search: { color: theme.colors.foreground, backgroundColor: theme.colors.surface1 },
-    selected: { backgroundColor: theme.colors.surface1, borderColor: theme.colors.accent },
+    root: { backgroundColor: theme.colors.surface0, gap: space, padding: space, maxHeight: layout.compact ? 520 : 640 },
+    title: { color: theme.colors.foreground, fontSize: layout.compact ? 18 : 20, fontWeight: "700" as const },
+    sectionLabel: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12, fontWeight: "600" as const, letterSpacing: 0.6, textTransform: "uppercase" as const },
+    body: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
+    hint: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
+    error: { color: theme.colors.statusWarning, fontSize: layout.compact ? 12 : 13 },
+    searchRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: space },
+    search: { flex: 1, color: theme.colors.foreground, backgroundColor: theme.colors.surface1, borderRadius: 8,
+      paddingHorizontal: space, paddingVertical: layout.compact ? 8 : 10, fontSize: layout.compact ? 13 : 14 },
+    providerHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: space / 2, paddingVertical: layout.compact ? 6 : 8 },
+    chevron: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
+    provider: { color: theme.colors.foreground, fontSize: layout.compact ? 14 : 16, fontWeight: "600" as const },
+    count: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
+    models: { marginLeft: space / 2, paddingLeft: space, borderLeftWidth: 1, borderLeftColor: theme.colors.border, gap: 2 },
+    option: { paddingVertical: layout.compact ? 6 : 7, paddingHorizontal: space / 2, borderRadius: 6 },
+    optionSelected: { backgroundColor: theme.colors.surface1 },
+    optionText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
+    optionTextSelected: { color: theme.colors.accent, fontWeight: "600" as const },
+    chips: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: space / 2 },
+    chip: { paddingVertical: layout.compact ? 5 : 6, paddingHorizontal: space, borderRadius: 999, backgroundColor: theme.colors.surface1 },
+    chipSelected: { backgroundColor: theme.colors.accent },
+    chipText: { color: theme.colors.foreground, fontSize: layout.compact ? 12 : 13 },
+    chipTextSelected: { color: theme.colors.accentForeground, fontWeight: "600" as const },
+    link: { paddingVertical: space / 2 },
+    linkText: { color: theme.colors.accent, fontSize: layout.compact ? 12 : 13, fontWeight: "600" as const },
     button: { padding: space, backgroundColor: theme.colors.accent, borderRadius: 8, opacity: mutation.isPending || !model ? 0.5 : 1 },
-    buttonText: { color: theme.colors.accentForeground, fontWeight: "600" as const },
+    buttonText: { color: theme.colors.accentForeground, fontSize: layout.compact ? 14 : 15, fontWeight: "600" as const },
   };
-  const button = (key: string, label: string, selected: boolean, onPress: () => void) => (
+  const option = (key: string, label: string, selected: boolean, onPress: () => void) => (
     <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected, disabled: mutation.isPending }}
-      accessibilityLabel={label} disabled={mutation.isPending} onPress={onPress} style={[styles.choice, selected && styles.selected]}>
-      <Text style={styles.text}>{label}</Text>
+      accessibilityLabel={label} disabled={mutation.isPending} onPress={onPress} style={[styles.option, selected && styles.optionSelected]}>
+      <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{selected ? "✓ " : ""}{label}</Text>
+    </Pressable>
+  );
+  const chip = (key: string, label: string, selected: boolean, onPress: () => void) => (
+    <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected, disabled: mutation.isPending }}
+      accessibilityLabel={label} disabled={mutation.isPending} onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+  const link = (key: string, label: string, onPress: () => void) => (
+    <Pressable key={key} accessibilityRole="button" accessibilityLabel={label} disabled={mutation.isPending}
+      onPress={onPress} style={styles.link}>
+      <Text style={styles.linkText}>{label}</Text>
     </Pressable>
   );
   if (!source) return <View style={styles.root}><Text style={styles.error}>The source agent is no longer available.</Text></View>;
@@ -75,44 +106,63 @@ function AgentPicker({ agentId, theme, layout, close, openScreen }: PluginButton
     <View style={styles.root}>
       <Text style={styles.title}>Switch provider and model</Text>
       {isRunning(source.status) ? <Text style={styles.error}>This agent is running and will be interrupted.</Text> : null}
-      <TextInput accessibilityLabel="Search models" placeholder="Search models" autoCapitalize="none" autoCorrect={false}
-        value={search} onChangeText={setSearch} placeholderTextColor={theme.colors.foregroundMuted} style={[styles.choice, styles.search]} />
-      {searching ? button("clear-search", "Clear search", false, () => setSearch("")) : null}
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: space }}>
-        {query.isPending ? <Text style={styles.label}>Loading providers...</Text> : null}
+      <View style={styles.searchRow}>
+        <TextInput accessibilityLabel="Search models" placeholder="Search models" autoCapitalize="none" autoCorrect={false}
+          value={search} onChangeText={setSearch} placeholderTextColor={theme.colors.foregroundMuted} style={styles.search} />
+        {searching ? link("clear-search", "Clear search", () => setSearch("")) : null}
+      </View>
+      <ScrollView keyboardShouldPersistTaps="handled" style={{ flexShrink: 1 }} contentContainerStyle={{ gap: space }}>
+        {query.isPending ? <Text style={styles.hint}>Loading providers...</Text> : null}
         {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
-        {query.isError ? button("retry", "Retry provider discovery", false, () => { void query.refetch(); }) : null}
-        {query.isSuccess && !providers.some((entry) => entry.models.length) ? <Text style={styles.label}>No enabled, available models were reported.</Text> : null}
-        {query.isSuccess && searching && !visibleProviders.length ? <View style={{ gap: space }}>
-          <Text style={styles.label}>No models match "{search}"</Text>
+        {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
+        {query.isSuccess && !providers.some((entry) => entry.models.length) ? <Text style={styles.hint}>No enabled, available models were reported.</Text> : null}
+        {query.isSuccess && searching && !visibleProviders.length ? <View>
+          <Text style={styles.hint}>No models match "{search}"</Text>
         </View> : null}
         {visibleProviders.map((entry) => {
           const isExpanded = searching || expanded?.has(entry.id) === true;
           const count = entry.models.length;
-          return <View key={entry.id} style={{ gap: space }}>
-            {searching ? <Text accessibilityRole="header" style={styles.title}>
-              ▾ {entry.label} ({count} of {providers.find((candidate) => candidate.id === entry.id)!.models.length})
-            </Text> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: isExpanded, disabled: mutation.isPending }}
+          const total = providers.find((candidate) => candidate.id === entry.id)!.models.length;
+          return <View key={entry.id} style={{ gap: 2 }}>
+            {searching ? <View style={styles.providerHeader}>
+              <Text style={styles.chevron}>▾</Text>
+              <Text style={styles.provider}>{entry.label}</Text>
+              <View style={{ flex: 1 }} />
+              <Text style={styles.count}>{count} of {total}</Text>
+            </View> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: isExpanded, disabled: mutation.isPending }}
               accessibilityLabel={`${entry.label}, ${count} ${count === 1 ? "model" : "models"}, ${isExpanded ? "expanded" : "collapsed"}`}
-              disabled={mutation.isPending} onPress={() => setExpanded((value) => toggleProvider(value ?? new Set(), entry.id))} style={styles.choice}>
-              <Text style={styles.title}>{isExpanded ? "▾" : "▸"} {entry.label} ({count})</Text>
+              disabled={mutation.isPending} onPress={() => setExpanded((value) => toggleProvider(value ?? new Set(), entry.id))} style={styles.providerHeader}>
+              <Text style={styles.chevron}>{isExpanded ? "▾" : "▸"}</Text>
+              <Text style={styles.provider}>{entry.label}</Text>
+              <View style={{ flex: 1 }} />
+              <Text style={styles.count}>{count}</Text>
             </Pressable>}
-            {isExpanded ? entry.models.map((candidate) => button(`${entry.id}/${candidate.id}`, `${candidate.label}${candidate.current ? " (current)" : ""}`,
-              selection?.provider === entry.id && selection.model === candidate.id, () => {
-                mutation.reset();
-                setSelection({ provider: entry.id, model: candidate.id, ...defaultSelection(entry, candidate, source) });
-              })) : null}
+            {isExpanded ? <View style={styles.models}>
+              {entry.models.map((candidate) => option(`${entry.id}/${candidate.id}`, `${candidate.label}${candidate.current ? " (current)" : ""}`,
+                selection?.provider === entry.id && selection.model === candidate.id, () => {
+                  mutation.reset();
+                  setSelection({ provider: entry.id, model: candidate.id, ...defaultSelection(entry, candidate, source) });
+                }))}
+            </View> : null}
           </View>;
         })}
         {model && selection ? <View style={{ gap: space }}>
-          <Text style={styles.label}>Selected: {provider?.label} · {model.label}</Text>
-          <Text style={styles.title}>Effort</Text>
-          {model.thinkingOptions.length ? model.thinkingOptions.map((option) => button(`effort-${option.id}`, option.label,
-            selection.thinkingOptionId === option.id, () => setSelection({ ...selection, thinkingOptionId: option.id }))) : <Text style={styles.label}>Provider default</Text>}
-          <Text style={styles.title}>Mode</Text>
-          {button("default-mode", "Provider default", !selection.modeId, () => setSelection({ ...selection, modeId: undefined }))}
-          {provider?.modes.map((mode) => button(`mode-${mode.id}`, mode.label, selection.modeId === mode.id,
-            () => setSelection({ ...selection, modeId: mode.id })))}
+          <Text style={styles.hint}>Selected: <Text style={styles.body}>{provider?.label} · {model.label}</Text></Text>
+          <View style={{ gap: space / 2 }}>
+            <Text style={styles.sectionLabel}>Effort</Text>
+            {model.thinkingOptions.length ? <View style={styles.chips}>
+              {model.thinkingOptions.map((entry) => chip(`effort-${entry.id}`, entry.label, selection.thinkingOptionId === entry.id,
+                () => setSelection({ ...selection, thinkingOptionId: entry.id })))}
+            </View> : <Text style={styles.hint}>Provider default</Text>}
+          </View>
+          <View style={{ gap: space / 2 }}>
+            <Text style={styles.sectionLabel}>Mode</Text>
+            <View style={styles.chips}>
+              {chip("default-mode", "Provider default", !selection.modeId, () => setSelection({ ...selection, modeId: undefined }))}
+              {provider?.modes.map((mode) => chip(`mode-${mode.id}`, mode.label, selection.modeId === mode.id,
+                () => setSelection({ ...selection, modeId: mode.id })))}
+            </View>
+          </View>
         </View> : null}
       </ScrollView>
       {mutation.isError ? <Text selectable style={styles.error}>{String(mutation.error)}</Text> : null}
