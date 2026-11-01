@@ -1,46 +1,41 @@
-import type { PluginClientContext, PluginScreenProps } from "@getpaseo/plugin/client";
-import { usePaseo, useRpc } from "@getpaseo/plugin/client";
-import { useToast } from "@getpaseo/plugin/client/ui";
+import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
+import { useAgent, usePaseo, useRpc } from "@getpaseo/plugin/client";
+import { Modal, ScrollView, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { buildTargets, defaultSelection, filterTargets, isSearching, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
-// Opened from the composer pill as a screen. The host popover dismisses itself on some content
-// changes, so the picker lives in a screen and renders its own centered card instead.
-export function createPickerScreen(openScreen: PluginClientContext["openScreen"]) {
-  return function PickerScreen({ params, theme, layout }: PluginScreenProps) {
-    const agentId = params.agentId;
-    const source: PickerSource = {
-      provider: params.provider ?? "",
-      model: params.model || null,
-      currentModeId: params.currentModeId || null,
-      status: params.status ?? "idle",
-      cwd: params.cwd ?? "",
-    };
-    if (!agentId || !source.cwd) {
-      return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: theme.colors.surface0 }}>
-        <Text style={{ color: theme.colors.statusWarning }}>No agent was specified.</Text>
-      </View>;
-    }
+// The pill popover is only the mount point: it renders the host Modal, so the picker appears as a
+// centered dialog (a sheet on compact layouts) and closing the dialog closes the popover.
+export function createPickerPopover(openScreen: PluginClientContext["openScreen"]) {
+  function AgentDialog({ agentId, theme, layout, close }: PluginButtonContentProps & { context: "agent" }) {
+    const source = useAgent(agentId, (agent): PickerSource => ({
+      provider: agent.provider, model: agent.model ?? null, currentModeId: agent.currentModeId ?? null,
+      status: agent.status, cwd: agent.cwd,
+    }));
+    if (!source) return null;
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: layout.compact ? 12 : 24, backgroundColor: theme.colors.surface1 }}>
-        <View style={{ width: "100%", maxWidth: 440, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: theme.colors.border }}>
-          <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={() => {}} openScreen={openScreen} />
-        </View>
-      </View>
+      <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
+        <Modal.Content scrollable={false} contentContainerStyle={{ padding: 0, gap: 0 }}>
+          <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />
+        </Modal.Content>
+      </Modal>
     );
+  }
+  return function PickerPopover(props: PluginButtonContentProps) {
+    return props.context === "agent" ? <AgentDialog {...props} /> : null;
   };
 }
 
 function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   agentId: string;
   source: PickerSource;
-  theme: PluginScreenProps["theme"];
-  layout: PluginScreenProps["layout"];
+  theme: PluginButtonContentProps["theme"];
+  layout: PluginButtonContentProps["layout"];
   close: () => void;
   openScreen: PluginClientContext["openScreen"];
 }) {
@@ -77,16 +72,8 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
     },
   });
   const space = layout.compact ? 8 : 12;
-  // Reserve the host's 12px content padding, 4px menu padding and 1px border on each side.
-  // Measure both chrome groups so wrapped warnings/errors leave the list only the remaining space.
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  // A stable body size matters: resizing the popover under the pointer makes Paseo dismiss it.
-  // Size it once from the host cap and let only the list scroll.
-  const bodyHeight = Math.max(200, Math.min(440, windowHeight - 16) - 34);
-  const bodyWidth = Math.max(240, Math.min(392, windowWidth - 80));
   const styles = {
-    root: { backgroundColor: theme.colors.surface0, gap: space, padding: space, height: bodyHeight, ...(layout.compact ? {} : { width: bodyWidth }) },
-    title: { color: theme.colors.foreground, fontSize: layout.compact ? 18 : 20, fontWeight: "700" as const },
+    root: { flex: 1, minHeight: 0, gap: space, padding: space },
     sectionLabel: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12, fontWeight: "600" as const, letterSpacing: 0.6, textTransform: "uppercase" as const },
     body: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     hint: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
@@ -133,7 +120,6 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   );
   return (
     <View style={styles.root}>
-      <Text style={styles.title}>Switch provider and model</Text>
       {isRunning(source.status) ? <Text style={styles.error}>This agent is running and will be interrupted.</Text> : null}
       <View style={styles.searchRow}>
         <TextInput accessibilityLabel="Search models" placeholder="Search models" autoCapitalize="none" autoCorrect={false}

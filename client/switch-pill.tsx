@@ -1,8 +1,10 @@
 import type { PaseoAgent } from "@getpaseo/client";
 import type { PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
-import { PICKER_SCREEN_ID, isSubagent } from "../shared/switchboard";
+import { isSubagent } from "../shared/switchboard";
+import { createPickerPopover } from "./picker";
 
 export function contributePills(client: PluginClientContext) {
+  const picker = createPickerPopover((input) => client.openScreen(input));
   const lifetime = new AbortController();
   const pills = new Map<string, { workspaceId: string; registration: PluginButtonRegistration }>();
   function remove(id: string) { pills.get(id)?.registration.remove(); pills.delete(id); }
@@ -14,11 +16,7 @@ export function contributePills(client: PluginClientContext) {
     remove(agent.id);
     pills.set(agent.id, { workspaceId, registration: client.addComposerPill({
       id: "switch", workspaceId, agentId: agent.id,
-      button: { title: "Switch", label: "Switch", icon: "Play", behavior: { kind: "action",
-        onPress: () => client.openScreen({ screenId: PICKER_SCREEN_ID, params: {
-          agentId: agent.id, workspaceId, provider: agent.provider, model: agent.model ?? "",
-          currentModeId: agent.currentModeId ?? "", status: agent.status, cwd: agent.cwd,
-        } }) } },
+      button: { title: "Switch", label: "Switch", icon: "Play", behavior: { kind: "popover", Content: picker } },
     }) });
   }
   void client.paseo.agents.list({ subscribe: {}, signal: lifetime.signal }).then(({ subscription }) => {
