@@ -1,12 +1,21 @@
 import { availableProviders, resolveTarget, type ProviderSnapshot } from "../shared/catalog";
 import { SWITCH_USAGE } from "../shared/switchboard";
 
+// Aggregator providers (OpenCode) namespace model ids as "<upstream>/<model>", but their labels omit the
+// upstream, so identical labels from different upstreams look the same. Show the upstream as a prefix.
+export function modelLabel(id: string, label: string): string {
+  const slash = id.indexOf("/");
+  if (slash < 1) return label;
+  const upstream = id.slice(0, slash);
+  return label.toLowerCase().startsWith(`${upstream.toLowerCase()}/`) ? label : `${upstream}/${label}`;
+}
+
 export interface SourceTarget { provider: string; model: string | null; currentModeId?: string | null }
 export function buildTargets(snapshot: ProviderSnapshot, source?: SourceTarget) {
   return availableProviders(snapshot).map((provider) => ({
     id: provider.provider, label: provider.label ?? provider.provider, modes: provider.modes ?? [],
     models: (provider.models ?? []).map((model) => ({
-      id: model.id, label: model.label, thinkingOptions: model.thinkingOptions ?? [],
+      id: model.id, label: modelLabel(model.id, model.label), thinkingOptions: model.thinkingOptions ?? [],
       defaultThinkingOptionId: model.defaultThinkingOptionId,
       current: source?.provider === provider.provider && source.model === model.id,
     })),

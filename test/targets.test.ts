@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTargets, defaultSelection } from "../client/targets";
+import { buildTargets, defaultSelection, modelLabel } from "../client/targets";
 import { snapshot } from "./helpers";
 
 describe("live target catalog", () => {
@@ -23,5 +23,14 @@ describe("live target catalog", () => {
     const live = snapshot();
     live.entries.push({ provider: "future-provider", enabled: true, status: "ready", models: [{ provider: "future-provider", id: "future/model", label: "Future" }] });
     expect(buildTargets(live).at(-1)?.models[0].id).toBe("future/model");
+  });
+  it("prefixes namespaced model ids with their upstream so same-named models stay distinguishable", () => {
+    expect(buildTargets(snapshot())[2].models[0].label).toBe("openai/Luna");
+    expect(modelLabel("openrouter/moonshotai/kimi-k3.1-pro", "Kimi K3.1 Pro")).toBe("openrouter/Kimi K3.1 Pro");
+    expect(modelLabel("opencode-go/kimi-k3.1-pro", "Kimi K3.1 Pro")).toBe("opencode-go/Kimi K3.1 Pro");
+  });
+  it("leaves plain ids and already-prefixed labels alone", () => {
+    expect(modelLabel("gpt-6.1-sol", "GPT-6.1 Sol")).toBe("GPT-6.1 Sol");
+    expect(modelLabel("openai/gpt-6", "OpenAI/GPT-6")).toBe("OpenAI/GPT-6");
   });
 });
