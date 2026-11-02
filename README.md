@@ -7,7 +7,7 @@ Move a Paseo task to any enabled, available provider and model, including during
 Requires Paseo daemon and app 0.14.0 or newer, authenticated target providers, and a writable agent working directory. Git is optional. From a host with Paseo configured:
 
 ```powershell
-paseo plugin install "C:\Users\Alvin\.paseo\plugin-sources\paseo-switchboard"
+paseo plugin install "C:\Users\Alvin\.paseo\plugin-sources\paseo-provider-switch"
 ```
 
 ## Use
