@@ -3,6 +3,7 @@ import { createOpenAgentScreen } from "./client/open-agent";
 import { contributePills } from "./client/switch-pill";
 import { createSwitchedRow } from "./client/switched-row";
 import { parseSwitchArgs } from "./client/targets";
+import { loadCatalog } from "./shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, ROW_KIND, ROW_VERSION, switchRpc, switchedRowSchema } from "./shared/switchboard";
 
 export default function contribute(client: PluginClientContext) {
@@ -13,7 +14,7 @@ export default function contribute(client: PluginClientContext) {
     client.addSlashCommand({ name: "switch", description: "Switch this task to another provider and model",
       argumentHint: "<provider>/<model> [effort]", context: "agent",
       async onSubmit({ args, paseo, agent, rpc, openScreen: open }) {
-        const snapshot = await paseo.providers.snapshot({ cwd: agent.cwd });
+        const snapshot = await loadCatalog(paseo.providers, agent.cwd);
         const target = parseSwitchArgs(args, snapshot, agent);
         const result = await rpc(switchRpc, { agentId: agent.id, ...target });
         open({ screenId: OPEN_AGENT_SCREEN_ID, params: { agentId: result.agentId } });

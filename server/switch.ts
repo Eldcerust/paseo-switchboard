@@ -1,6 +1,6 @@
-import type { PaseoAgent, PaseoAgentHandle, PaseoApi, PaseoWorkspaceAgentCreateOptions } from "@getpaseo/client";
+import type { PaseoAgent, PaseoAgentHandle, PaseoWorkspaceAgentCreateOptions } from "@getpaseo/client";
 import type { RpcInput } from "@getpaseo/plugin";
-import { resolveTarget } from "../shared/catalog";
+import { loadCatalog, resolveTarget, type CatalogApi } from "../shared/catalog";
 import { HISTORY_ENTRIES, ROW_KIND, ROW_VERSION, isRunning, isSubagent, switchRpc } from "../shared/switchboard";
 import { buildHandoff, firstRequest, switchTitle } from "./handoff";
 import { appendInterruption, handoffPathFor, writeHandoff } from "./paths";
@@ -12,7 +12,7 @@ type SourceHandle = Pick<PaseoAgentHandle, "refresh" | "archive"> & {
 };
 export interface SwitchApi {
   agents: { ref(id: string): SourceHandle };
-  providers: Pick<PaseoApi["providers"], "snapshot">;
+  providers: CatalogApi;
   workspaces: { ref(id: string): { agents: { create(options: PaseoWorkspaceAgentCreateOptions): Promise<{ id: string }> } } };
 }
 interface Timing {
@@ -101,7 +101,7 @@ export function createSwitcher(timing: Timing = {}) {
     let newAgentId: string | undefined;
     try {
       const agent = initial.agent;
-      const target = resolveTarget(await paseo.providers.snapshot({ cwd: agent.cwd }), input);
+      const target = resolveTarget(await loadCatalog(paseo.providers, agent.cwd), input);
       const history = await readTimeline(source);
       const repoFacts = await gatherRepoFacts(agent.cwd);
       const latest = await source.refresh();

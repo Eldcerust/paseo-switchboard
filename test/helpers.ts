@@ -122,7 +122,10 @@ export function fakePaseo(cwd: string, overrides: Partial<PaseoAgent> = {}, item
   };
   const paseo: SwitchApi = {
     agents: { ref(id) { if (id !== state.source.id) throw new Error("Unexpected source"); return source; } },
-    providers: { async snapshot() { state.events.push("providers"); return state.targetSnapshot; } },
+    providers: {
+      async snapshot() { state.events.push("providers"); return state.targetSnapshot; },
+      async waitForReady() { return state.targetSnapshot; },
+    },
     workspaces: { ref(id) {
       state.events.push(`workspace:${id}`);
       return { agents: { async create(options) {

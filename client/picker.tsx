@@ -4,6 +4,7 @@ import { Modal, ScrollView, TextInput, useToast } from "@getpaseo/plugin/client/
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { loadCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { buildTargets, defaultSelection, filterTargets, isSearching, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
 
@@ -43,7 +44,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   const toast = useToast();
   const switchAgent = useRpc(switchRpc);
   const query = useQuery({ queryKey: ["switchboard-providers", agentId, source.cwd], enabled: Boolean(source.cwd),
-    queryFn: () => paseo.providers.snapshot({ cwd: source.cwd }), staleTime: 0 });
+    queryFn: () => loadCatalog(paseo.providers, source.cwd), staleTime: 0 });
   useEffect(() => paseo.providers.subscribe(() => { void query.refetch(); }), [paseo, query.refetch]);
   const providers = query.data ? buildTargets(query.data, source) : [];
   const [search, setSearch] = useState("");

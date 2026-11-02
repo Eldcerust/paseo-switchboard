@@ -1,6 +1,22 @@
-import type { PaseoProviderSnapshotResult } from "@getpaseo/client";
+import type { PaseoApi, PaseoProviderSnapshotResult } from "@getpaseo/client";
 
 export type ProviderSnapshot = PaseoProviderSnapshotResult;
+export type CatalogApi = Pick<PaseoApi["providers"], "snapshot" | "waitForReady">;
+
+// The daemon discovers providers lazily per cwd: the first snapshot for a cwd it has not scanned yet
+// returns immediately with every enabled provider `loading` and no models. Reading that as final
+// leaves the catalog empty, so wait for discovery to finish whenever any enabled provider is loading.
+// If one provider never finishes, fall back to a fresh snapshot so the providers that are ready still show.
+export async function loadCatalog(providers: CatalogApi, cwd: string): Promise<ProviderSnapshot> {
+  const snapshot = await providers.snapshot({ cwd });
+  if (!snapshot.entries.some((entry) => entry.enabled && entry.status === "loading")) return snapshot;
+  try {
+    return await providers.waitForReady({ cwd, timeoutMs: 30_000 });
+  } catch {
+    return providers.snapshot({ cwd });
+  }
+}
+
 export function availableProviders(snapshot: ProviderSnapshot) {
   return snapshot.entries.filter((entry) => entry.enabled && entry.status === "ready");
 }
