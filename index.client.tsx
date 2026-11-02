@@ -14,7 +14,7 @@ export default function contribute(client: PluginClientContext) {
     client.addSlashCommand({ name: "switch", description: "Switch this task to another provider and model",
       argumentHint: "<provider>/<model> [effort]", context: "agent",
       async onSubmit({ args, paseo, agent, rpc, openScreen: open }) {
-        const snapshot = await loadCatalog(paseo.providers, agent.cwd);
+        const snapshot = await loadCatalog(paseo.providers, agent.cwd, { provider: args.trim().split("/")[0] });
         const target = parseSwitchArgs(args, snapshot, agent);
         const result = await rpc(switchRpc, { agentId: agent.id, ...target });
         open({ screenId: OPEN_AGENT_SCREEN_ID, params: { agentId: result.agentId } });

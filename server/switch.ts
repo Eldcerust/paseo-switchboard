@@ -101,7 +101,7 @@ export function createSwitcher(timing: Timing = {}) {
     let newAgentId: string | undefined;
     try {
       const agent = initial.agent;
-      const target = resolveTarget(await loadCatalog(paseo.providers, agent.cwd), input);
+      const target = resolveTarget(await loadCatalog(paseo.providers, agent.cwd, { provider: input.provider }), input);
       const history = await readTimeline(source);
       const repoFacts = await gatherRepoFacts(agent.cwd);
       const latest = await source.refresh();

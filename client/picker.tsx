@@ -4,11 +4,14 @@ import { Modal, ScrollView, TextInput, useToast } from "@getpaseo/plugin/client/
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { loadCatalog } from "../shared/catalog";
+import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { buildTargets, defaultSelection, filterTargets, isSearching, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
+
+const DISCOVERY_POLL_MS = 400;
+const DISCOVERY_POLL_LIMIT_MS = 30_000;
 
 // The pill popover is only the mount point: it renders the host Modal, so the picker appears as a
 // centered dialog (a sheet on compact layouts) and closing the dialog closes the popover.
@@ -43,8 +46,13 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   const paseo = usePaseo();
   const toast = useToast();
   const switchAgent = useRpc(switchRpc);
+  // Show whatever is ready straight away and keep refreshing while providers are still being discovered,
+  // so they appear as they finish instead of the dialog waiting on the slowest one (or showing nothing).
+  const [openedAt] = useState(() => Date.now());
   const query = useQuery({ queryKey: ["switchboard-providers", agentId, source.cwd], enabled: Boolean(source.cwd),
-    queryFn: () => loadCatalog(paseo.providers, source.cwd), staleTime: 0 });
+    queryFn: () => readCatalog(paseo.providers, source.cwd), staleTime: 0,
+    refetchInterval: (state) => isDiscovering(state.state.data) && Date.now() - openedAt < DISCOVERY_POLL_LIMIT_MS ? DISCOVERY_POLL_MS : false });
+  const discovering = isDiscovering(query.data);
   useEffect(() => paseo.providers.subscribe(() => { void query.refetch(); }), [paseo, query.refetch]);
   const providers = query.data ? buildTargets(query.data, source) : [];
   const [search, setSearch] = useState("");
@@ -128,10 +136,10 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
         {searching ? link("clear-search", "Clear search", () => setSearch("")) : null}
       </View>
       <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ gap: space }}>
-        {query.isPending ? <Text style={styles.hint}>Loading providers...</Text> : null}
+        {query.isPending || discovering ? <Text style={styles.hint}>Loading providers...</Text> : null}
         {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
         {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
-        {query.isSuccess && !providers.some((entry) => entry.models.length) ? <Text style={styles.hint}>No enabled, available models were reported.</Text> : null}
+        {query.isSuccess && !discovering && !providers.some((entry) => entry.models.length) ? <Text style={styles.hint}>No enabled, available models were reported.</Text> : null}
         {query.isSuccess && searching && !visibleProviders.length ? <View>
           <Text style={styles.hint}>No models match "{search}"</Text>
         </View> : null}

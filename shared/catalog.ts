@@ -1,19 +1,52 @@
 import type { PaseoApi, PaseoProviderSnapshotResult } from "@getpaseo/client";
 
 export type ProviderSnapshot = PaseoProviderSnapshotResult;
-export type CatalogApi = Pick<PaseoApi["providers"], "snapshot" | "waitForReady">;
+export type CatalogApi = Pick<PaseoApi["providers"], "snapshot">;
+
+// The Paseo app keeps provider snapshots in wire form: `entries` is empty and the catalog sits in
+// `compactSnapshot`, where each model points into a shared table of thinking-option sets. Rebuild the
+// plain `entries` (mirrors expandProviderSnapshot in @getpaseo/protocol) so every reader sees one shape.
+export function expandCatalog(snapshot: ProviderSnapshot): ProviderSnapshot {
+  const compact = snapshot.compactSnapshot;
+  if (!compact || snapshot.entries.length) return snapshot;
+  const entries = compact.entries.map(({ models: compactModels, ...entry }) => {
+    if (!compactModels) return entry;
+    const models = compactModels.map(({ thinkingSet, ...model }) => {
+      if (thinkingSet === undefined) return { provider: entry.provider, ...model };
+      const set = compact.thinkingSets[thinkingSet];
+      if (!set) throw new RangeError(`Provider snapshot references missing thinking set ${thinkingSet}`);
+      return { provider: entry.provider, ...model, thinkingOptions: set.options,
+        ...(set.defaultOptionId !== undefined ? { defaultThinkingOptionId: set.defaultOptionId } : {}) };
+    });
+    return { ...entry, models };
+  });
+  return { ...snapshot, entries };
+}
 
 // The daemon discovers providers lazily per cwd: the first snapshot for a cwd it has not scanned yet
-// returns immediately with every enabled provider `loading` and no models. Reading that as final
-// leaves the catalog empty, so wait for discovery to finish whenever any enabled provider is loading.
-// If one provider never finishes, fall back to a fresh snapshot so the providers that are ready still show.
-export async function loadCatalog(providers: CatalogApi, cwd: string): Promise<ProviderSnapshot> {
-  const snapshot = await providers.snapshot({ cwd });
-  if (!snapshot.entries.some((entry) => entry.enabled && entry.status === "loading")) return snapshot;
-  try {
-    return await providers.waitForReady({ cwd, timeoutMs: 30_000 });
-  } catch {
-    return providers.snapshot({ cwd });
+// returns immediately with every enabled provider `loading` and no models (discovery takes a few seconds).
+// Reading that as final leaves the catalog empty, so callers keep reading until discovery settles.
+export function isDiscovering(snapshot: ProviderSnapshot | undefined, provider?: string): boolean {
+  return Boolean(snapshot?.entries.some((entry) => entry.enabled && entry.status === "loading" && (!provider || entry.provider === provider)));
+}
+
+export async function readCatalog(providers: CatalogApi, cwd: string): Promise<ProviderSnapshot> {
+  return expandCatalog(await providers.snapshot({ cwd }));
+}
+
+export interface CatalogTiming { provider?: string; timeoutMs?: number; intervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void> }
+
+// Poll until discovery settles, for callers that need a definitive answer (the /switch command and the
+// server-side switch). Pass `provider` to wait only for the one being switched to, so an unrelated slow
+// provider cannot stall it. This polls `snapshot` rather than using `waitForReady`, which judges readiness
+// from `entries` and so returns at once on wire-form snapshots. On timeout it returns what it has.
+export async function loadCatalog(providers: CatalogApi, cwd: string, timing: CatalogTiming = {}): Promise<ProviderSnapshot> {
+  const { provider, timeoutMs = 15_000, intervalMs = 400, now = Date.now, sleep = (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)) } = timing;
+  const deadline = now() + timeoutMs;
+  for (;;) {
+    const snapshot = await readCatalog(providers, cwd);
+    if (!isDiscovering(snapshot, provider) || now() >= deadline) return snapshot;
+    await sleep(intervalMs);
   }
 }
 
