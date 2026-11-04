@@ -6,7 +6,7 @@ Switchboard moves a Paseo task to a fresh agent on the provider and model you ch
 
 Open the Switch pill on a top-level agent. The picker groups Paseo's enabled, available models into collapsible provider sections. The current provider starts expanded; press a provider heading to collapse or expand its models. The search bar matches provider and model names and ids without regard to case, and every search word must match. Search expands matching providers and shows matching and total model counts. Clearing search restores your expanded sections. The selected model stays visible above its effort and mode options, even when its section is collapsed or filtered out.
 
-Choose a model to review its effort options and the provider's modes. The model's default effort is selected. A matching source mode is kept; otherwise the target provider's default applies. Press Switch now to save a handoff, stop a running source, and open the replacement in the same workspace. The original is always archived after success and can be restored from Paseo's archived list.
+Choose a model, then set its effort and mode from the two dropdowns pinned above the Switch now button. They stay on screen while the model list scrolls. The model's default effort is selected, and either dropdown can be set back to Provider default. A matching source mode is kept; otherwise the target provider's default applies. Press Switch now to save a handoff, stop a running source, and open the replacement in the same workspace. The original is always archived after success and can be restored from Paseo's archived list.
 
 The agent composer also accepts `/switch <provider>/<model> [effort]`. Model ids may contain slashes.
 

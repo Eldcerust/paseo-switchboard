@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTargets, defaultSelection, modelLabel } from "../client/targets";
+import { PROVIDER_DEFAULT, buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, modeChoices, modelLabel } from "../client/targets";
 import { snapshot } from "./helpers";
 
 describe("live target catalog", () => {
@@ -32,5 +32,23 @@ describe("live target catalog", () => {
   it("leaves plain ids and already-prefixed labels alone", () => {
     expect(modelLabel("gpt-6.1-sol", "GPT-6.1 Sol")).toBe("GPT-6.1 Sol");
     expect(modelLabel("openai/gpt-6", "OpenAI/GPT-6")).toBe("OpenAI/GPT-6");
+  });
+  it("builds effort and mode dropdown choices with an explicit provider-default entry first", () => {
+    const targets = buildTargets(snapshot());
+    expect(effortChoices(targets[1].models[0])).toEqual([
+      { label: "Provider default", value: PROVIDER_DEFAULT }, { label: "Medium", value: "medium" }, { label: "Extra high", value: "xhigh" }]);
+    expect(modeChoices(targets[1])).toEqual([
+      { label: "Provider default", value: PROVIDER_DEFAULT }, { label: "Full access", value: "full-access" }, { label: "Auto", value: "auto" }]);
+    expect(effortChoices(targets[0].models[0])).toEqual([{ label: "Provider default", value: PROVIDER_DEFAULT }]);
+  });
+  it("shows a placeholder choice until a model is selected", () => {
+    expect(effortChoices()).toEqual([{ label: "Select a model first", value: PROVIDER_DEFAULT }]);
+    expect(modeChoices()).toEqual([{ label: "Select a model first", value: PROVIDER_DEFAULT }]);
+  });
+  it("round-trips an unset choice through the dropdown sentinel without colliding with a real mode id", () => {
+    expect(choiceValue(undefined)).toBe(PROVIDER_DEFAULT);
+    expect(choiceId(PROVIDER_DEFAULT)).toBeUndefined();
+    expect(choiceId(choiceValue("default"))).toBe("default");
+    expect(choiceId(choiceValue("xhigh"))).toBe("xhigh");
   });
 });

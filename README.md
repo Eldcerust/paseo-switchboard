@@ -12,7 +12,7 @@ paseo plugin install "C:\Users\Alvin\.paseo\plugin-sources\paseo-provider-switch
 
 ## Use
 
-Open Switch in a top-level agent's composer, choose a provider and model, review effort and mode, then press Switch now. Models and options come from Paseo at runtime. Disabled, loading, failed and unavailable providers are excluded. A model's default effort is preselected. A source mode is preselected only if the target provider offers the same id; Provider default leaves the mode unset.
+Open Switch in a top-level agent's composer, choose a provider and model, set effort and mode from the dropdowns pinned above the button, then press Switch now. Models and options come from Paseo at runtime. Disabled, loading, failed and unavailable providers are excluded. A model's default effort is preselected. A source mode is preselected only if the target provider offers the same id; Provider default leaves the mode unset.
 
 Provider sections collapse and expand when you press their headings, which show model counts. The current provider starts expanded. Use the search bar to match provider and model names or ids, including ids containing slashes. Search is case-insensitive, treats punctuation literally, and requires every word to match. Matching providers expand and show matching and total model counts. Clear search to restore your expanded sections. A Selected line above Effort keeps your choice visible when its provider is collapsed or filtered out. Search and expansion state last only while the picker is open.
 

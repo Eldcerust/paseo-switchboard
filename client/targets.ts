@@ -68,6 +68,32 @@ export function defaultSelection(provider: TargetProvider, model: TargetModel, s
   return { thinkingOptionId, modeId };
 }
 
+// A dropdown value must be a string, but "no explicit choice" is `undefined` in a selection. Provider mode
+// ids can be anything (Claude has a real "default" mode), so the sentinel must not look like one.
+export const PROVIDER_DEFAULT = "__provider_default__";
+
+export interface Choice { label: string; value: string }
+
+export function effortChoices(model?: TargetModel): Choice[] {
+  if (!model) return [{ label: "Select a model first", value: PROVIDER_DEFAULT }];
+  return [{ label: "Provider default", value: PROVIDER_DEFAULT },
+    ...model.thinkingOptions.map((option) => ({ label: option.label, value: option.id }))];
+}
+
+export function modeChoices(provider?: TargetProvider): Choice[] {
+  if (!provider) return [{ label: "Select a model first", value: PROVIDER_DEFAULT }];
+  return [{ label: "Provider default", value: PROVIDER_DEFAULT },
+    ...provider.modes.map((mode) => ({ label: mode.label, value: mode.id }))];
+}
+
+export function choiceValue(id: string | undefined): string {
+  return id ?? PROVIDER_DEFAULT;
+}
+
+export function choiceId(value: string): string | undefined {
+  return value === PROVIDER_DEFAULT ? undefined : value;
+}
+
 export function parseSwitchArgs(args: string, snapshot: ProviderSnapshot, source?: SourceTarget) {
   const parts = args.trim().split(/\s+/).filter(Boolean);
   if (parts.length < 1 || parts.length > 2) throw new Error(SWITCH_USAGE);

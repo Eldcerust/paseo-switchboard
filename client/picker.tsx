@@ -1,12 +1,12 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { useAgent, usePaseo, useRpc } from "@getpaseo/plugin/client";
-import { Modal, ScrollView, TextInput, useToast } from "@getpaseo/plugin/client/ui";
+import { Modal, ScrollView, SettingsCard, SettingsSelect, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
-import { buildTargets, defaultSelection, filterTargets, isSearching, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
+import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
@@ -83,7 +83,6 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   const space = layout.compact ? 8 : 12;
   const styles = {
     root: { flex: 1, minHeight: 0, gap: space, padding: space },
-    sectionLabel: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12, fontWeight: "600" as const, letterSpacing: 0.6, textTransform: "uppercase" as const },
     body: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     hint: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
     error: { color: theme.colors.statusWarning, fontSize: layout.compact ? 12 : 13 },
@@ -99,11 +98,6 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
     optionSelected: { backgroundColor: theme.colors.surface1 },
     optionText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     optionTextSelected: { color: theme.colors.accent, fontWeight: "600" as const },
-    chips: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: space / 2 },
-    chip: { paddingVertical: layout.compact ? 5 : 6, paddingHorizontal: space, borderRadius: 999, backgroundColor: theme.colors.surface1 },
-    chipSelected: { backgroundColor: theme.colors.accent },
-    chipText: { color: theme.colors.foreground, fontSize: layout.compact ? 12 : 13 },
-    chipTextSelected: { color: theme.colors.accentForeground, fontWeight: "600" as const },
     link: { paddingVertical: space / 2 },
     linkText: { color: theme.colors.accent, fontSize: layout.compact ? 12 : 13, fontWeight: "600" as const },
     button: { padding: space, backgroundColor: theme.colors.accent, borderRadius: 8, opacity: mutation.isPending || !model ? 0.5 : 1 },
@@ -113,12 +107,6 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
     <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected, disabled: mutation.isPending }}
       accessibilityLabel={label} disabled={mutation.isPending} onPress={onPress} style={[styles.option, selected && styles.optionSelected]}>
       <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{selected ? "✓ " : ""}{label}</Text>
-    </Pressable>
-  );
-  const chip = (key: string, label: string, selected: boolean, onPress: () => void) => (
-    <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected, disabled: mutation.isPending }}
-      accessibilityLabel={label} disabled={mutation.isPending} onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </Pressable>
   );
   const link = (key: string, label: string, onPress: () => void) => (
@@ -171,25 +159,19 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
             </View> : null}
           </View>;
         })}
-        {model && selection ? <View style={{ gap: space }}>
-          <Text style={styles.hint}>Selected: <Text style={styles.body}>{provider?.label} · {model.label}</Text></Text>
-          <View style={{ gap: space / 2 }}>
-            <Text style={styles.sectionLabel}>Effort</Text>
-            {model.thinkingOptions.length ? <View style={styles.chips}>
-              {model.thinkingOptions.map((entry) => chip(`effort-${entry.id}`, entry.label, selection.thinkingOptionId === entry.id,
-                () => setSelection({ ...selection, thinkingOptionId: entry.id })))}
-            </View> : <Text style={styles.hint}>Provider default</Text>}
-          </View>
-          <View style={{ gap: space / 2 }}>
-            <Text style={styles.sectionLabel}>Mode</Text>
-            <View style={styles.chips}>
-              {chip("default-mode", "Provider default", !selection.modeId, () => setSelection({ ...selection, modeId: undefined }))}
-              {provider?.modes.map((mode) => chip(`mode-${mode.id}`, mode.label, selection.modeId === mode.id,
-                () => setSelection({ ...selection, modeId: mode.id })))}
-            </View>
-          </View>
-        </View> : null}
       </ScrollView>
+      {/* Pinned below the scrolling model list, like the Switch button, so effort and mode are always reachable. */}
+      <Text style={styles.hint} numberOfLines={1}>
+        {model && selection ? <>Selected: <Text style={styles.body}>{provider?.label} · {model.label}</Text></> : "Choose a model to set its effort and mode."}
+      </Text>
+      <SettingsCard>
+        <SettingsSelect key="effort" label="Effort" value={choiceValue(selection?.thinkingOptionId)} options={effortChoices(model)}
+          disabled={mutation.isPending || !model || !model.thinkingOptions.length}
+          onValueChange={(value) => { if (selection) setSelection({ ...selection, thinkingOptionId: choiceId(value) }); }} />
+        <SettingsSelect key="mode" label="Mode" value={choiceValue(selection?.modeId)} options={modeChoices(provider)}
+          disabled={mutation.isPending || !model}
+          onValueChange={(value) => { if (selection) setSelection({ ...selection, modeId: choiceId(value) }); }} />
+      </SettingsCard>
       {mutation.isError ? <Text selectable style={styles.error}>{String(mutation.error)}</Text> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Switch now" disabled={mutation.isPending || !model || query.isError}
         onPress={() => mutation.mutate()} style={styles.button}>
