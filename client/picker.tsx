@@ -1,11 +1,12 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
-import { useAgent, usePaseo, useRpc } from "@getpaseo/plugin/client";
+import { useAgent } from "@getpaseo/plugin/client";
 import { Modal, ScrollView, SettingsCard, SettingsSelect, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
+import { usePaseo, useRpc } from "./hub-compat";
 import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };

@@ -1,6 +1,7 @@
 import type { PaseoAgent } from "@getpaseo/client";
 import type { PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
 import { isSubagent } from "../shared/switchboard";
+import { registerComposerPill } from "./hub-compat";
 import { createPickerPopover } from "./picker";
 
 export function contributePills(client: PluginClientContext) {
@@ -14,8 +15,9 @@ export function contributePills(client: PluginClientContext) {
     if (!workspaceId || agent.archivedAt || isSubagent(agent)) { remove(agent.id); return; }
     if (pills.get(agent.id)?.workspaceId === workspaceId) return;
     remove(agent.id);
-    pills.set(agent.id, { workspaceId, registration: client.addComposerPill({
-      id: "switch", workspaceId, agentId: agent.id,
+    // Follows the Pill hub when one is running; otherwise it is the Switch pill it always was.
+    pills.set(agent.id, { workspaceId, registration: registerComposerPill(client, {
+      toolId: "switch", workspaceId, agentId: agent.id,
       button: { title: "Switch", label: "Switch", icon: "Play", behavior: { kind: "popover", Content: picker } },
     }) });
   }
