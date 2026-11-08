@@ -1,13 +1,13 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { useAgent } from "@getpaseo/plugin/client";
-import { Modal, ScrollView, SettingsCard, SettingsSelect, TextInput, useToast } from "@getpaseo/plugin/client/ui";
+import { Modal, ScrollView, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { useHostedClient, usePaseo, useRpc } from "./hub-compat";
-import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
+import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, resolveExpansion, toggleProvider, type Choice, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
@@ -172,19 +172,56 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
       <Text style={styles.hint} numberOfLines={1}>
         {model && selection ? <>Selected: <Text style={styles.body}>{provider?.label} · {model.label}</Text></> : "Choose a model to set its effort and mode."}
       </Text>
-      <SettingsCard>
-        <SettingsSelect key="effort" label="Effort" value={choiceValue(selection?.thinkingOptionId)} options={effortChoices(model)}
-          disabled={mutation.isPending || !model || !model.thinkingOptions.length}
-          onValueChange={(value) => { if (selection) setSelection({ ...selection, thinkingOptionId: choiceId(value) }); }} />
-        <SettingsSelect key="mode" label="Mode" value={choiceValue(selection?.modeId)} options={modeChoices(provider)}
-          disabled={mutation.isPending || !model}
-          onValueChange={(value) => { if (selection) setSelection({ ...selection, modeId: choiceId(value) }); }} />
-      </SettingsCard>
+      <View style={{ gap: 4 }}>
+        <ChoiceRow label="Effort" choices={effortChoices(model)} value={choiceValue(selection?.thinkingOptionId)}
+          disabled={mutation.isPending || !model || !model.thinkingOptions.length} colors={theme.colors} compact={layout.compact}
+          onChange={(value) => { if (selection) setSelection({ ...selection, thinkingOptionId: choiceId(value) }); }} />
+        <ChoiceRow label="Mode" choices={modeChoices(provider)} value={choiceValue(selection?.modeId)}
+          disabled={mutation.isPending || !model} colors={theme.colors} compact={layout.compact}
+          onChange={(value) => { if (selection) setSelection({ ...selection, modeId: choiceId(value) }); }} />
+      </View>
       {mutation.isError ? <Text selectable style={styles.error}>{String(mutation.error)}</Text> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Switch now" disabled={mutation.isPending || !model || query.isError}
         onPress={() => mutation.mutate()} style={styles.button}>
         <Text style={styles.buttonText}>{mutation.isPending ? "Switching..." : "Switch now"}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+// Effort and mode used to be host SettingsSelects, which are built for the full Settings page and
+// take a large row each. The picker is a small inline tab in the Pill hub, so use compact chips.
+function ChoiceRow({ label, choices, value, disabled, colors, compact, onChange }: {
+  label: string;
+  choices: Choice[];
+  value: string;
+  disabled: boolean;
+  colors: PluginButtonContentProps["theme"]["colors"];
+  compact: boolean;
+  onChange(value: string): void;
+}) {
+  const options = choices.filter((choice) => choice.label !== "Select a model first");
+  const text = (choice: Choice) => (choice.label === "Provider default" ? "Default" : choice.label);
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <Text style={{ color: colors.foregroundMuted, fontSize: compact ? 11 : 12, width: 34 }}>{label}</Text>
+      {options.length === 0 ? (
+        <Text style={{ color: colors.foregroundMuted, fontSize: compact ? 12 : 13 }}>Select a model first</Text>
+      ) : (
+        <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+          {options.map((choice) => {
+            const selected = choice.value === value;
+            return (
+              <Pressable key={choice.value} accessibilityRole="button" accessibilityLabel={`${label}: ${choice.label}`}
+                accessibilityState={{ selected, disabled }} disabled={disabled} onPress={() => onChange(choice.value)}
+                style={{ paddingHorizontal: 7, paddingVertical: compact ? 3 : 4, borderRadius: 6,
+                  backgroundColor: selected ? colors.accent : colors.surface1, opacity: disabled ? 0.5 : 1 }}>
+                <Text style={{ color: selected ? colors.accentForeground : colors.foreground, fontSize: compact ? 12 : 13 }}>{text(choice)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
