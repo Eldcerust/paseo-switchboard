@@ -12,7 +12,7 @@ import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, f
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
 const HOSTED_PICKER_MAX_HEIGHT = 460;
-const MAX_MODELS = 16;
+const MAX_MODELS = 9;
 const DISCOVERY_POLL_MS = 400;
 const DISCOVERY_POLL_LIMIT_MS = 30_000;
 
@@ -101,16 +101,17 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
     searchRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: space },
     search: { flex: 1, color: theme.colors.foreground, backgroundColor: theme.colors.surface1, borderRadius: 8,
       paddingHorizontal: space, paddingVertical: layout.compact ? 8 : 10, fontSize: layout.compact ? 13 : 14 },
-    tabs: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
-    tab: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingHorizontal: 10, paddingVertical: layout.compact ? 6 : 7,
-      borderRadius: 999, backgroundColor: theme.colors.surface1, borderWidth: 1, borderColor: theme.colors.border },
-    tabActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
-    tabText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14, fontWeight: "600" as const },
-    tabTextActive: { color: theme.colors.accentForeground },
     count: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12 },
-    grid: { flex: 1, minHeight: 0, overflow: "hidden" as const, flexDirection: "row" as const, flexWrap: "wrap" as const, alignContent: "flex-start" as const, gap: 6 },
-    option: { paddingVertical: layout.compact ? 6 : 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border },
-    optionSelected: { backgroundColor: theme.colors.surface1, borderColor: theme.colors.accent },
+    panes: { flex: 1, minHeight: 0, flexDirection: "row" as const, gap: space, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, overflow: "hidden" as const },
+    rail: { width: layout.compact ? 104 : 124, padding: 6, gap: 2, backgroundColor: theme.colors.surface1 },
+    railItem: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6,
+      paddingHorizontal: 8, paddingVertical: layout.compact ? 7 : 8, borderRadius: 6 },
+    railItemActive: { backgroundColor: theme.colors.accent },
+    railText: { flexShrink: 1, color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14, fontWeight: "600" as const },
+    railTextActive: { color: theme.colors.accentForeground },
+    list: { flex: 1, minWidth: 0, paddingVertical: 6, paddingRight: 6, gap: 2, overflow: "hidden" as const },
+    option: { paddingVertical: layout.compact ? 7 : 8, paddingHorizontal: 10, borderRadius: 6 },
+    optionSelected: { backgroundColor: theme.colors.surface1 },
     optionText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     optionTextSelected: { color: theme.colors.accent, fontWeight: "600" as const },
     link: { paddingVertical: space / 2 },
@@ -138,30 +139,32 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
           value={search} onChangeText={setSearch} placeholderTextColor={theme.colors.foregroundMuted} style={styles.search} />
         {searching ? link("clear-search", "Clear search", () => setSearch("")) : null}
       </View>
-      <View style={styles.tabs}>
-        {visibleProviders.map((entry) => {
-          const active = entry.id === activeProvider?.id;
-          const count = entry.models.length;
-          return <Pressable key={entry.id} accessibilityRole="button" accessibilityState={{ selected: active, disabled: mutation.isPending }}
-            accessibilityLabel={`${entry.label}, ${count} ${count === 1 ? "model" : "models"}`} disabled={mutation.isPending}
-            onPress={(event) => { event.stopPropagation(); setTab(entry.id); }} style={[styles.tab, active && styles.tabActive]}>
-            <Text style={[styles.tabText, active && styles.tabTextActive]}>{entry.label}</Text>
-            <Text style={[styles.count, active && styles.tabTextActive]}>{count}</Text>
-          </Pressable>;
-        })}
-      </View>
-      <View style={styles.grid}>
-        {query.isPending || discovering ? <Text style={styles.hint}>Loading providers...</Text> : null}
-        {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
-        {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
-        {query.isSuccess && !discovering && !providers.some((entry) => entry.models.length) ? <Text style={styles.hint}>No enabled, available models were reported.</Text> : null}
-        {query.isSuccess && searching && !visibleProviders.length ? <Text style={styles.hint}>No models match "{search}"</Text> : null}
-        {shownModels.map((candidate) => option(`${activeProvider!.id}/${candidate.id}`, `${candidate.label}${candidate.current ? " (current)" : ""}`,
-          selection?.provider === activeProvider!.id && selection.model === candidate.id, () => {
-            mutation.reset();
-            setSelection({ provider: activeProvider!.id, model: candidate.id, ...defaultSelection(activeProvider!, candidate, source) });
-          }))}
-        {hiddenCount > 0 ? <Text style={styles.hint}>+{hiddenCount} more. Search to narrow the list.</Text> : null}
+      <View style={styles.panes}>
+        <View style={styles.rail}>
+          {visibleProviders.map((entry) => {
+            const active = entry.id === activeProvider?.id;
+            const count = entry.models.length;
+            return <Pressable key={entry.id} accessibilityRole="button" accessibilityState={{ selected: active, disabled: mutation.isPending }}
+              accessibilityLabel={`${entry.label}, ${count} ${count === 1 ? "model" : "models"}`} disabled={mutation.isPending}
+              onPress={(event) => { event.stopPropagation(); setTab(entry.id); }} style={[styles.railItem, active && styles.railItemActive]}>
+              <Text style={[styles.railText, active && styles.railTextActive]} numberOfLines={1}>{entry.label}</Text>
+              <Text style={styles.count}>{count}</Text>
+            </Pressable>;
+          })}
+        </View>
+        <View style={styles.list}>
+          {query.isPending || discovering ? <Text style={styles.hint}>Loading providers...</Text> : null}
+          {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
+          {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
+          {query.isSuccess && !discovering && !providers.some((entry) => entry.models.length) ? <Text style={styles.hint}>No enabled, available models were reported.</Text> : null}
+          {query.isSuccess && searching && !visibleProviders.length ? <Text style={styles.hint}>No models match "{search}"</Text> : null}
+          {shownModels.map((candidate) => option(`${activeProvider!.id}/${candidate.id}`, `${candidate.label}${candidate.current ? " (current)" : ""}`,
+            selection?.provider === activeProvider!.id && selection.model === candidate.id, () => {
+              mutation.reset();
+              setSelection({ provider: activeProvider!.id, model: candidate.id, ...defaultSelection(activeProvider!, candidate, source) });
+            }))}
+          {hiddenCount > 0 ? <Text style={styles.hint}>+{hiddenCount} more. Search to narrow the list.</Text> : null}
+        </View>
       </View>
       {/* Effort, mode and the Switch button sit below the model grid. */}
       <Text style={styles.hint} numberOfLines={1}>
