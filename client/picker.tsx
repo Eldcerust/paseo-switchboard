@@ -14,6 +14,8 @@ type PickerSource = SourceTarget & { status: string; cwd: string };
 const HOSTED_PICKER_MAX_HEIGHT = 340;
 const MODAL_PICKER_MAX_HEIGHT = 420;
 const RENDER_LIMIT = 200;
+const PHONE_PICKER_MAX_HEIGHT = 560;
+const HUB_CHROME_HEIGHT = 380;
 const RADIUS = 12;
 const DISCOVERY_POLL_MS = 400;
 const DISCOVERY_POLL_LIMIT_MS = 30_000;
@@ -34,7 +36,11 @@ export function createPickerPopover(openScreen: PluginClientContext["openScreen"
     const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
     // Keep the body at one size. Collapsing the last provider group shrinks the content, and a
     // resize under the pointer makes the host dismiss the popover instead of showing the hint.
-    const bodyHeight = Math.max(280, Math.min(hosted ? HOSTED_PICKER_MAX_HEIGHT : MODAL_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.5)));
+    // Phones get a bottom sheet that runs to the bottom of the screen, so fill what is left under the
+    // hub header and tab bar (HUB_CHROME_HEIGHT) instead of the desktop popover's fixed cap.
+    const bodyHeight = layout.compact
+      ? Math.max(340, Math.min(PHONE_PICKER_MAX_HEIGHT, windowHeight - HUB_CHROME_HEIGHT))
+      : Math.max(280, Math.min(hosted ? HOSTED_PICKER_MAX_HEIGHT : MODAL_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.5)));
     if (hosted) return <View style={{ height: bodyHeight }}>{picker}</View>;
     return (
       <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
