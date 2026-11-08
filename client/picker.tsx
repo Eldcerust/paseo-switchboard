@@ -1,17 +1,18 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { useAgent } from "@getpaseo/plugin/client";
-import { Modal, ScrollView, TextInput, useToast } from "@getpaseo/plugin/client/ui";
+import { Modal, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { useHostedClient, usePaseo, useRpc } from "./hub-compat";
-import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, resolveExpansion, toggleProvider, type Choice, type SourceTarget, type TargetProvider } from "./targets";
+import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, type Choice, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
-const HOSTED_PICKER_MAX_HEIGHT = 520;
+const HOSTED_PICKER_MAX_HEIGHT = 460;
+const MAX_MODELS = 16;
 const DISCOVERY_POLL_MS = 400;
 const DISCOVERY_POLL_LIMIT_MS = 30_000;
 
@@ -31,7 +32,7 @@ export function createPickerPopover(openScreen: PluginClientContext["openScreen"
     const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
     // Keep the body at one size. Collapsing the last provider group shrinks the content, and a
     // resize under the pointer makes the host dismiss the popover instead of showing the hint.
-    const bodyHeight = Math.max(320, Math.min(HOSTED_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.6)));
+    const bodyHeight = Math.max(360, Math.min(HOSTED_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.75)));
     if (hosted) return <View style={{ height: bodyHeight }}>{picker}</View>;
     return (
       <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
@@ -67,13 +68,13 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   useEffect(() => paseo.providers.subscribe(() => { void query.refetch(); }), [paseo, query.refetch]);
   const providers = query.data ? buildTargets(query.data, source) : [];
   const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState<Set<TargetProvider["id"]> | null>(null);
-  // Capture the first non-empty catalog once, including when it arrives after the initial render.
-  const next = resolveExpansion(expanded, providers);
-  if (next !== expanded) setExpanded(next);
+  const [tab, setTab] = useState<TargetProvider["id"]>();
   const searching = isSearching(search);
   const visibleProviders = filterTargets(providers, search);
-  const noneExpanded = !searching && visibleProviders.length > 0 && !visibleProviders.some((entry) => expanded?.has(entry.id));
+  // One provider at a time as tabs: the whole picker fits one fixed-size body, so nothing scrolls.
+  const activeProvider = visibleProviders.find((entry) => entry.id === tab) ?? visibleProviders.find((entry) => entry.id === source.provider) ?? visibleProviders[0];
+  const shownModels = activeProvider?.models.slice(0, MAX_MODELS) ?? [];
+  const hiddenCount = (activeProvider?.models.length ?? 0) - shownModels.length;
   const [selection, setSelection] = useState<{ provider: string; model: string; thinkingOptionId?: string; modeId?: string }>();
   const provider = providers.find((entry) => entry.id === selection?.provider);
   const model = provider?.models.find((entry) => entry.id === selection?.model);
@@ -100,13 +101,16 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
     searchRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: space },
     search: { flex: 1, color: theme.colors.foreground, backgroundColor: theme.colors.surface1, borderRadius: 8,
       paddingHorizontal: space, paddingVertical: layout.compact ? 8 : 10, fontSize: layout.compact ? 13 : 14 },
-    providerHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: space / 2, paddingVertical: layout.compact ? 6 : 8 },
-    chevron: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
-    provider: { color: theme.colors.foreground, fontSize: layout.compact ? 14 : 16, fontWeight: "600" as const },
-    count: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
-    models: { marginLeft: space / 2, paddingLeft: space, borderLeftWidth: 1, borderLeftColor: theme.colors.border, gap: 2 },
-    option: { paddingVertical: layout.compact ? 6 : 7, paddingHorizontal: space / 2, borderRadius: 6 },
-    optionSelected: { backgroundColor: theme.colors.surface1 },
+    tabs: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
+    tab: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingHorizontal: 10, paddingVertical: layout.compact ? 6 : 7,
+      borderRadius: 999, backgroundColor: theme.colors.surface1, borderWidth: 1, borderColor: theme.colors.border },
+    tabActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
+    tabText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14, fontWeight: "600" as const },
+    tabTextActive: { color: theme.colors.accentForeground },
+    count: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12 },
+    grid: { flex: 1, minHeight: 0, overflow: "hidden" as const, flexDirection: "row" as const, flexWrap: "wrap" as const, alignContent: "flex-start" as const, gap: 6 },
+    option: { paddingVertical: layout.compact ? 6 : 7, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border },
+    optionSelected: { backgroundColor: theme.colors.surface1, borderColor: theme.colors.accent },
     optionText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     optionTextSelected: { color: theme.colors.accent, fontWeight: "600" as const },
     link: { paddingVertical: space / 2 },
@@ -134,44 +138,32 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
           value={search} onChangeText={setSearch} placeholderTextColor={theme.colors.foregroundMuted} style={styles.search} />
         {searching ? link("clear-search", "Clear search", () => setSearch("")) : null}
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ gap: space }}>
+      <View style={styles.tabs}>
+        {visibleProviders.map((entry) => {
+          const active = entry.id === activeProvider?.id;
+          const count = entry.models.length;
+          return <Pressable key={entry.id} accessibilityRole="button" accessibilityState={{ selected: active, disabled: mutation.isPending }}
+            accessibilityLabel={`${entry.label}, ${count} ${count === 1 ? "model" : "models"}`} disabled={mutation.isPending}
+            onPress={(event) => { event.stopPropagation(); setTab(entry.id); }} style={[styles.tab, active && styles.tabActive]}>
+            <Text style={[styles.tabText, active && styles.tabTextActive]}>{entry.label}</Text>
+            <Text style={[styles.count, active && styles.tabTextActive]}>{count}</Text>
+          </Pressable>;
+        })}
+      </View>
+      <View style={styles.grid}>
         {query.isPending || discovering ? <Text style={styles.hint}>Loading providers...</Text> : null}
         {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
         {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
         {query.isSuccess && !discovering && !providers.some((entry) => entry.models.length) ? <Text style={styles.hint}>No enabled, available models were reported.</Text> : null}
-        {query.isSuccess && searching && !visibleProviders.length ? <View>
-          <Text style={styles.hint}>No models match "{search}"</Text>
-        </View> : null}
-        {query.isSuccess && noneExpanded ? <Text style={styles.hint}>All providers are collapsed. Expand one to choose a model.</Text> : null}
-        {visibleProviders.map((entry) => {
-          const isExpanded = searching || expanded?.has(entry.id) === true;
-          const count = entry.models.length;
-          const total = providers.find((candidate) => candidate.id === entry.id)!.models.length;
-          return <View key={entry.id} style={{ gap: 2 }}>
-            {searching ? <View style={styles.providerHeader}>
-              <Text style={styles.chevron}>▾</Text>
-              <Text style={styles.provider}>{entry.label}</Text>
-              <View style={{ flex: 1 }} />
-              <Text style={styles.count}>{count} of {total}</Text>
-            </View> : <Pressable accessibilityRole="button" accessibilityState={{ expanded: isExpanded, disabled: mutation.isPending }}
-              accessibilityLabel={`${entry.label}, ${count} ${count === 1 ? "model" : "models"}, ${isExpanded ? "expanded" : "collapsed"}`}
-              disabled={mutation.isPending} onPress={(event) => { event.stopPropagation(); setExpanded((value) => toggleProvider(value ?? new Set(), entry.id)); }} style={styles.providerHeader}>
-              <Text style={styles.chevron}>{isExpanded ? "▾" : "▸"}</Text>
-              <Text style={styles.provider}>{entry.label}</Text>
-              <View style={{ flex: 1 }} />
-              <Text style={styles.count}>{count}</Text>
-            </Pressable>}
-            {isExpanded ? <View style={styles.models}>
-              {entry.models.map((candidate) => option(`${entry.id}/${candidate.id}`, `${candidate.label}${candidate.current ? " (current)" : ""}`,
-                selection?.provider === entry.id && selection.model === candidate.id, () => {
-                  mutation.reset();
-                  setSelection({ provider: entry.id, model: candidate.id, ...defaultSelection(entry, candidate, source) });
-                }))}
-            </View> : null}
-          </View>;
-        })}
-      </ScrollView>
-      {/* Pinned below the scrolling model list, like the Switch button, so effort and mode are always reachable. */}
+        {query.isSuccess && searching && !visibleProviders.length ? <Text style={styles.hint}>No models match "{search}"</Text> : null}
+        {shownModels.map((candidate) => option(`${activeProvider!.id}/${candidate.id}`, `${candidate.label}${candidate.current ? " (current)" : ""}`,
+          selection?.provider === activeProvider!.id && selection.model === candidate.id, () => {
+            mutation.reset();
+            setSelection({ provider: activeProvider!.id, model: candidate.id, ...defaultSelection(activeProvider!, candidate, source) });
+          }))}
+        {hiddenCount > 0 ? <Text style={styles.hint}>+{hiddenCount} more. Search to narrow the list.</Text> : null}
+      </View>
+      {/* Effort, mode and the Switch button sit below the model grid. */}
       <Text style={styles.hint} numberOfLines={1}>
         {model && selection ? <>Selected: <Text style={styles.body}>{provider?.label} · {model.label}</Text></> : "Choose a model to set its effort and mode."}
       </Text>
