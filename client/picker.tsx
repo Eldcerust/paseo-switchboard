@@ -11,7 +11,7 @@ import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, f
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
-const HOSTED_PICKER_MAX_HEIGHT = 300;
+const HOSTED_PICKER_MAX_HEIGHT = 340;
 const MODAL_PICKER_MAX_HEIGHT = 420;
 const RENDER_LIMIT = 200;
 const DISCOVERY_POLL_MS = 400;
@@ -33,7 +33,7 @@ export function createPickerPopover(openScreen: PluginClientContext["openScreen"
     const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
     // Keep the body at one size. Collapsing the last provider group shrinks the content, and a
     // resize under the pointer makes the host dismiss the popover instead of showing the hint.
-    const bodyHeight = Math.max(260, Math.min(hosted ? HOSTED_PICKER_MAX_HEIGHT : MODAL_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.45)));
+    const bodyHeight = Math.max(280, Math.min(hosted ? HOSTED_PICKER_MAX_HEIGHT : MODAL_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.5)));
     if (hosted) return <View style={{ height: bodyHeight }}>{picker}</View>;
     return (
       <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
@@ -69,6 +69,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   useEffect(() => paseo.providers.subscribe(() => { void query.refetch(); }), [paseo, query.refetch]);
   const providers = query.data ? buildTargets(query.data, source) : [];
   const [search, setSearch] = useState("");
+  const [menu, setMenu] = useState<"effort" | "mode" | null>(null);
   const [tab, setTab] = useState<TargetProvider["id"]>();
   const searching = isSearching(search);
   const visibleProviders = filterTargets(providers, search);
@@ -171,14 +172,16 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
         </ScrollView>
       </View>
       {/* Effort, mode and the Switch button sit below the model grid. */}
-      {model && selection ? <View style={{ gap: 4 }}>
-        <ChoiceRow label="Effort" choices={effortChoices(model)} value={choiceValue(selection?.thinkingOptionId)}
-          disabled={mutation.isPending || !model.thinkingOptions.length} colors={theme.colors} compact={layout.compact}
-          onChange={(value) => { setSelection({ ...selection, thinkingOptionId: choiceId(value) }); }} />
-        <ChoiceRow label="Mode" choices={modeChoices(provider)} value={choiceValue(selection?.modeId)}
-          disabled={mutation.isPending} colors={theme.colors} compact={layout.compact}
-          onChange={(value) => { setSelection({ ...selection, modeId: choiceId(value) }); }} />
-      </View> : <Text style={styles.hint} numberOfLines={1}>Pick a model to set effort and mode.</Text>}
+      <View style={{ flexDirection: "row", gap: 6 }}>
+        <Dropdown label="Effort" choices={effortChoices(model)} value={choiceValue(selection?.thinkingOptionId)} open={menu === "effort"}
+          disabled={mutation.isPending || !model || !model.thinkingOptions.length} colors={theme.colors} compact={layout.compact}
+          onToggle={() => setMenu((value) => (value === "effort" ? null : "effort"))}
+          onChange={(value) => { setMenu(null); if (selection) setSelection({ ...selection, thinkingOptionId: choiceId(value) }); }} />
+        <Dropdown label="Mode" choices={modeChoices(provider)} value={choiceValue(selection?.modeId)} open={menu === "mode"}
+          disabled={mutation.isPending || !model} colors={theme.colors} compact={layout.compact}
+          onToggle={() => setMenu((value) => (value === "mode" ? null : "mode"))}
+          onChange={(value) => { setMenu(null); if (selection) setSelection({ ...selection, modeId: choiceId(value) }); }} />
+      </View>
       {mutation.isError ? <Text selectable style={styles.error}>{String(mutation.error)}</Text> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Switch now" disabled={mutation.isPending || !model || query.isError}
         onPress={() => mutation.mutate()} style={styles.button}>
@@ -188,39 +191,50 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   );
 }
 
-// Effort and mode used to be host SettingsSelects, which are built for the full Settings page and
-// take a large row each. The picker is a small inline tab in the Pill hub, so use compact chips.
-function ChoiceRow({ label, choices, value, disabled, colors, compact, onChange }: {
+// Effort and mode are two compact dropdowns side by side. The menu opens upward inside the picker body
+// (not a host popover), so opening it never resizes the surface.
+function Dropdown({ label, choices, value, disabled, open, colors, compact, onToggle, onChange }: {
   label: string;
   choices: Choice[];
   value: string;
   disabled: boolean;
+  open: boolean;
   colors: PluginButtonContentProps["theme"]["colors"];
   compact: boolean;
+  onToggle(): void;
   onChange(value: string): void;
 }) {
   const options = choices.filter((choice) => choice.label !== "Select a model first");
   const text = (choice: Choice) => (choice.label === "Provider default" ? "Default" : choice.label);
+  const current = options.find((choice) => choice.value === value);
+  const size = compact ? 13 : 14;
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-      <Text style={{ color: colors.foregroundMuted, fontSize: compact ? 11 : 12, width: 34 }}>{label}</Text>
-      {options.length === 0 ? (
-        <Text style={{ color: colors.foregroundMuted, fontSize: compact ? 12 : 13 }}>Select a model first</Text>
-      ) : (
-        <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
-          {options.map((choice) => {
-            const selected = choice.value === value;
-            return (
-              <Pressable key={choice.value} accessibilityRole="button" accessibilityLabel={`${label}: ${choice.label}`}
-                accessibilityState={{ selected, disabled }} disabled={disabled} onPress={() => onChange(choice.value)}
-                style={{ paddingHorizontal: 7, paddingVertical: compact ? 3 : 4, borderRadius: 6,
-                  backgroundColor: selected ? colors.accent : colors.surface1, opacity: disabled ? 0.5 : 1 }}>
-                <Text style={{ color: selected ? colors.accentForeground : colors.foreground, fontSize: compact ? 12 : 13 }}>{text(choice)}</Text>
-              </Pressable>
-            );
-          })}
+    <View style={{ flex: 1, minWidth: 0 }}>
+      {open && !disabled ? (
+        <View style={{ position: "absolute", left: 0, right: 0, bottom: 44, zIndex: 20, maxHeight: 190, borderRadius: 10, borderWidth: 1,
+          borderColor: colors.border, backgroundColor: colors.surface1, overflow: "hidden" }}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 4, gap: 2 }}>
+            {options.map((choice) => {
+              const selected = choice.value === value;
+              return (
+                <Pressable key={choice.value} accessibilityRole="button" accessibilityLabel={`${label}: ${choice.label}`}
+                  accessibilityState={{ selected }} onPress={() => onChange(choice.value)}
+                  style={{ height: 34, justifyContent: "center", paddingHorizontal: 10, borderRadius: 6, backgroundColor: selected ? colors.accent : "transparent" }}>
+                  <Text numberOfLines={1} style={{ color: selected ? colors.accentForeground : colors.foreground, fontSize: size }}>{text(choice)}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
-      )}
+      ) : null}
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${current ? text(current) : "none"}`} accessibilityState={{ expanded: open, disabled }}
+        disabled={disabled} onPress={(event) => { event.stopPropagation(); onToggle(); }}
+        style={{ height: 38, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1,
+          borderColor: open ? colors.accent : colors.border, backgroundColor: colors.surface1, opacity: disabled ? 0.5 : 1 }}>
+        <Text style={{ color: colors.foregroundMuted, fontSize: size - 1 }}>{label}</Text>
+        <Text numberOfLines={1} style={{ flex: 1, color: colors.foreground, fontSize: size, fontWeight: "600" }}>{current ? text(current) : "-"}</Text>
+        <Text style={{ color: colors.foregroundMuted, fontSize: size - 1 }}>{open ? "▴" : "▾"}</Text>
+      </Pressable>
     </View>
   );
 }
