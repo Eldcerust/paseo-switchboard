@@ -29,10 +29,13 @@ export function createPickerPopover(openScreen: PluginClientContext["openScreen"
     }));
     if (!source) return null;
     const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
-    if (hosted) return <View style={{ height: Math.min(HOSTED_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.6)) }}>{picker}</View>;
+    // Keep the body at one size. Collapsing the last provider group shrinks the content, and a
+    // resize under the pointer makes the host dismiss the popover instead of showing the hint.
+    const bodyHeight = Math.max(320, Math.min(HOSTED_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.6)));
+    if (hosted) return <View style={{ height: bodyHeight }}>{picker}</View>;
     return (
       <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
-        <Modal.Content scrollable={false} contentContainerStyle={{ padding: 0, gap: 0 }}>
+        <Modal.Content scrollable={false} contentContainerStyle={{ padding: 0, gap: 0, height: bodyHeight }}>
           {picker}
         </Modal.Content>
       </Modal>
