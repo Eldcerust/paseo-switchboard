@@ -11,8 +11,7 @@ import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, f
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
-const HOSTED_PICKER_MAX_HEIGHT = 460;
-const MAX_MODELS = 9;
+const HOSTED_PICKER_MAX_HEIGHT = 380;
 const DISCOVERY_POLL_MS = 400;
 const DISCOVERY_POLL_LIMIT_MS = 30_000;
 
@@ -32,7 +31,7 @@ export function createPickerPopover(openScreen: PluginClientContext["openScreen"
     const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
     // Keep the body at one size. Collapsing the last provider group shrinks the content, and a
     // resize under the pointer makes the host dismiss the popover instead of showing the hint.
-    const bodyHeight = Math.max(360, Math.min(HOSTED_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.75)));
+    const bodyHeight = Math.max(280, Math.min(HOSTED_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.5)));
     if (hosted) return <View style={{ height: bodyHeight }}>{picker}</View>;
     return (
       <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
@@ -73,8 +72,14 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   const visibleProviders = filterTargets(providers, search);
   // One provider at a time as tabs: the whole picker fits one fixed-size body, so nothing scrolls.
   const activeProvider = visibleProviders.find((entry) => entry.id === tab) ?? visibleProviders.find((entry) => entry.id === source.provider) ?? visibleProviders[0];
-  const shownModels = activeProvider?.models.slice(0, MAX_MODELS) ?? [];
-  const hiddenCount = (activeProvider?.models.length ?? 0) - shownModels.length;
+  // Show only as many whole rows as the list can hold, so nothing is clipped and nothing scrolls.
+  const [listHeight, setListHeight] = useState(0);
+  const rowHeight = (layout.compact ? 34 : 38) + 2;
+  const total = activeProvider?.models.length ?? 0;
+  const fit = Math.max(1, Math.floor((listHeight - 12) / rowHeight));
+  const capacity = total > fit ? Math.max(1, fit - 1) : total;
+  const shownModels = activeProvider?.models.slice(0, capacity) ?? [];
+  const hiddenCount = total - shownModels.length;
   const [selection, setSelection] = useState<{ provider: string; model: string; thinkingOptionId?: string; modeId?: string }>();
   const provider = providers.find((entry) => entry.id === selection?.provider);
   const model = provider?.models.find((entry) => entry.id === selection?.model);
@@ -103,26 +108,26 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
       paddingHorizontal: space, paddingVertical: layout.compact ? 8 : 10, fontSize: layout.compact ? 13 : 14 },
     count: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12 },
     panes: { flex: 1, minHeight: 0, flexDirection: "row" as const, gap: space, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, overflow: "hidden" as const },
-    rail: { width: layout.compact ? 104 : 124, padding: 6, gap: 2, backgroundColor: theme.colors.surface1 },
+    rail: { width: layout.compact ? 120 : 140, padding: 6, gap: 2, backgroundColor: theme.colors.surface1 },
     railItem: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6,
       paddingHorizontal: 8, paddingVertical: layout.compact ? 7 : 8, borderRadius: 6 },
     railItemActive: { backgroundColor: theme.colors.accent },
     railText: { flexShrink: 1, color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14, fontWeight: "600" as const },
     railTextActive: { color: theme.colors.accentForeground },
     list: { flex: 1, minWidth: 0, paddingVertical: 6, paddingRight: 6, gap: 2, overflow: "hidden" as const },
-    option: { paddingVertical: layout.compact ? 7 : 8, paddingHorizontal: 10, borderRadius: 6 },
+    option: { height: layout.compact ? 34 : 38, justifyContent: "center" as const, paddingHorizontal: 10, borderRadius: 6 },
     optionSelected: { backgroundColor: theme.colors.surface1 },
     optionText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     optionTextSelected: { color: theme.colors.accent, fontWeight: "600" as const },
     link: { paddingVertical: space / 2 },
     linkText: { color: theme.colors.accent, fontSize: layout.compact ? 12 : 13, fontWeight: "600" as const },
-    button: { padding: space, backgroundColor: theme.colors.accent, borderRadius: 8, opacity: mutation.isPending || !model ? 0.5 : 1 },
+    button: { paddingVertical: layout.compact ? 9 : 10, alignItems: "center" as const, backgroundColor: theme.colors.accent, borderRadius: 8, opacity: mutation.isPending || !model ? 0.5 : 1 },
     buttonText: { color: theme.colors.accentForeground, fontSize: layout.compact ? 14 : 15, fontWeight: "600" as const },
   };
   const option = (key: string, label: string, selected: boolean, onPress: () => void) => (
     <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected, disabled: mutation.isPending }}
       accessibilityLabel={label} disabled={mutation.isPending} onPress={onPress} style={[styles.option, selected && styles.optionSelected]}>
-      <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{selected ? "✓ " : ""}{label}</Text>
+      <Text numberOfLines={1} style={[styles.optionText, selected && styles.optionTextSelected]}>{selected ? "✓ " : ""}{label}</Text>
     </Pressable>
   );
   const link = (key: string, label: string, onPress: () => void) => (
@@ -152,13 +157,14 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
             </Pressable>;
           })}
         </View>
-        <View style={styles.list}>
+        <View style={styles.list} onLayout={(event) => setListHeight(event.nativeEvent.layout.height)}>
           {query.isPending || discovering ? <Text style={styles.hint}>Loading providers...</Text> : null}
           {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
           {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
           {query.isSuccess && !discovering && !providers.some((entry) => entry.models.length) ? <Text style={styles.hint}>No enabled, available models were reported.</Text> : null}
           {query.isSuccess && searching && !visibleProviders.length ? <Text style={styles.hint}>No models match "{search}"</Text> : null}
-          {shownModels.map((candidate) => option(`${activeProvider!.id}/${candidate.id}`, `${candidate.label}${candidate.current ? " (current)" : ""}`,
+          {shownModels.map((candidate) => option(`${activeProvider!.id}/${candidate.id}`,
+            `${candidate.label}${activeProvider!.models.filter((entry) => entry.label === candidate.label).length > 1 ? ` · ${candidate.id}` : ""}${candidate.current ? " (current)" : ""}`,
             selection?.provider === activeProvider!.id && selection.model === candidate.id, () => {
               mutation.reset();
               setSelection({ provider: activeProvider!.id, model: candidate.id, ...defaultSelection(activeProvider!, candidate, source) });
@@ -167,17 +173,14 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
         </View>
       </View>
       {/* Effort, mode and the Switch button sit below the model grid. */}
-      <Text style={styles.hint} numberOfLines={1}>
-        {model && selection ? <>Selected: <Text style={styles.body}>{provider?.label} · {model.label}</Text></> : "Choose a model to set its effort and mode."}
-      </Text>
-      <View style={{ gap: 4 }}>
+      {model && selection ? <View style={{ gap: 4 }}>
         <ChoiceRow label="Effort" choices={effortChoices(model)} value={choiceValue(selection?.thinkingOptionId)}
-          disabled={mutation.isPending || !model || !model.thinkingOptions.length} colors={theme.colors} compact={layout.compact}
-          onChange={(value) => { if (selection) setSelection({ ...selection, thinkingOptionId: choiceId(value) }); }} />
+          disabled={mutation.isPending || !model.thinkingOptions.length} colors={theme.colors} compact={layout.compact}
+          onChange={(value) => { setSelection({ ...selection, thinkingOptionId: choiceId(value) }); }} />
         <ChoiceRow label="Mode" choices={modeChoices(provider)} value={choiceValue(selection?.modeId)}
-          disabled={mutation.isPending || !model} colors={theme.colors} compact={layout.compact}
-          onChange={(value) => { if (selection) setSelection({ ...selection, modeId: choiceId(value) }); }} />
-      </View>
+          disabled={mutation.isPending} colors={theme.colors} compact={layout.compact}
+          onChange={(value) => { setSelection({ ...selection, modeId: choiceId(value) }); }} />
+      </View> : <Text style={styles.hint} numberOfLines={1}>Pick a model to set effort and mode.</Text>}
       {mutation.isError ? <Text selectable style={styles.error}>{String(mutation.error)}</Text> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Switch now" disabled={mutation.isPending || !model || query.isError}
         onPress={() => mutation.mutate()} style={styles.button}>
