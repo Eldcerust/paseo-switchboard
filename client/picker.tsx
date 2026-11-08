@@ -3,30 +3,37 @@ import { useAgent } from "@getpaseo/plugin/client";
 import { Modal, ScrollView, SettingsCard, SettingsSelect, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
-import { usePaseo, useRpc } from "./hub-compat";
+import { useHostedClient, usePaseo, useRpc } from "./hub-compat";
 import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, resolveExpansion, toggleProvider, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
+const HOSTED_PICKER_MAX_HEIGHT = 520;
 const DISCOVERY_POLL_MS = 400;
 const DISCOVERY_POLL_LIMIT_MS = 30_000;
 
 // The pill popover is only the mount point: it renders the host Modal, so the picker appears as a
 // centered dialog (a sheet on compact layouts) and closing the dialog closes the popover.
+// Inside the Pill hub it is a tab body instead: the picker is drawn inline, with a fixed height
+// because its model list fills whatever space it is given and the hub's body has no height of its own.
 export function createPickerPopover(openScreen: PluginClientContext["openScreen"]) {
   function AgentDialog({ agentId, theme, layout, close }: PluginButtonContentProps & { context: "agent" }) {
+    const hosted = useHostedClient();
+    const { height: windowHeight } = useWindowDimensions();
     const source = useAgent(agentId, (agent): PickerSource => ({
       provider: agent.provider, model: agent.model ?? null, currentModeId: agent.currentModeId ?? null,
       status: agent.status, cwd: agent.cwd,
     }));
     if (!source) return null;
+    const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
+    if (hosted) return <View style={{ height: Math.min(HOSTED_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.6)) }}>{picker}</View>;
     return (
       <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
         <Modal.Content scrollable={false} contentContainerStyle={{ padding: 0, gap: 0 }}>
-          <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />
+          {picker}
         </Modal.Content>
       </Modal>
     );
