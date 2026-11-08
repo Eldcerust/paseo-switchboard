@@ -98,24 +98,24 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   });
   const space = layout.compact ? 8 : 12;
   const styles = {
-    root: { flex: 1, minHeight: 0, gap: 6, padding: space },
+    root: { flex: 1, minHeight: 0, gap: 6, paddingHorizontal: space, paddingBottom: space, paddingTop: 2 },
     body: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     hint: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
     error: { color: theme.colors.statusWarning, fontSize: layout.compact ? 12 : 13 },
     searchRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: space },
-    search: { flex: 1, color: theme.colors.foreground, backgroundColor: theme.colors.surface1, borderRadius: 8,
-      paddingHorizontal: space, paddingVertical: layout.compact ? 8 : 10, fontSize: layout.compact ? 13 : 14 },
+    search: { flex: 1, color: theme.colors.foregroundMuted, backgroundColor: theme.colors.surface1, borderRadius: 8,
+      paddingHorizontal: space, paddingVertical: layout.compact ? 6 : 7, fontSize: layout.compact ? 12 : 13 },
     count: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12 },
-    panes: { flex: 1, minHeight: 0, flexDirection: "row" as const, gap: space, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, overflow: "hidden" as const },
-    rail: { width: layout.compact ? 120 : 140, padding: 6, gap: 2, backgroundColor: theme.colors.surface1 },
+    panes: { flex: 1, minHeight: 0, flexDirection: "row" as const, gap: space },
+    rail: { width: layout.compact ? 116 : 136, gap: 6 },
     railItem: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6,
-      paddingHorizontal: 8, paddingVertical: layout.compact ? 7 : 8, borderRadius: 6 },
+      paddingHorizontal: 12, paddingVertical: layout.compact ? 9 : 10, borderRadius: 14, backgroundColor: theme.colors.surface1 },
     railItemActive: { backgroundColor: theme.colors.accent },
     railText: { flexShrink: 1, color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14, fontWeight: "600" as const },
     railTextActive: { color: theme.colors.accentForeground },
     list: { flex: 1, minWidth: 0, minHeight: 0 },
-    option: { height: layout.compact ? 34 : 38, justifyContent: "center" as const, paddingHorizontal: 10, borderRadius: 6 },
-    optionSelected: { backgroundColor: theme.colors.surface1 },
+    option: { height: layout.compact ? 34 : 38, justifyContent: "center" as const, paddingHorizontal: 12, borderRadius: 14, backgroundColor: theme.colors.surface1 },
+    optionSelected: { backgroundColor: theme.colors.surface1, borderWidth: 1, borderColor: theme.colors.accent },
     optionText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     optionTextSelected: { color: theme.colors.accent, fontWeight: "600" as const },
     link: { paddingVertical: space / 2 },
@@ -156,7 +156,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
             </Pressable>;
           })}
         </View>
-        <ScrollView style={styles.list} contentContainerStyle={{ gap: 2, paddingVertical: 6, paddingRight: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+        <ScrollView style={styles.list} contentContainerStyle={{ gap: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
           {query.isPending || discovering ? <Text style={styles.hint}>Loading providers...</Text> : null}
           {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
           {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
