@@ -162,7 +162,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
             </Pressable>;
           })}
         </View>
-        <ScrollView style={styles.list} contentContainerStyle={{ gap: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+        <ScrollView style={styles.list} contentContainerStyle={{ gap: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {query.isPending || discovering ? <Text style={styles.hint}>Loading providers...</Text> : null}
           {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
           {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
