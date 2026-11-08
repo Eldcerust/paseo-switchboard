@@ -1,6 +1,6 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { useAgent } from "@getpaseo/plugin/client";
-import { Modal, TextInput, useToast } from "@getpaseo/plugin/client/ui";
+import { Modal, ScrollView, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View, useWindowDimensions } from "react-native";
@@ -11,7 +11,9 @@ import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, f
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
 
-const HOSTED_PICKER_MAX_HEIGHT = 380;
+const HOSTED_PICKER_MAX_HEIGHT = 300;
+const MODAL_PICKER_MAX_HEIGHT = 420;
+const RENDER_LIMIT = 200;
 const DISCOVERY_POLL_MS = 400;
 const DISCOVERY_POLL_LIMIT_MS = 30_000;
 
@@ -31,7 +33,7 @@ export function createPickerPopover(openScreen: PluginClientContext["openScreen"
     const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
     // Keep the body at one size. Collapsing the last provider group shrinks the content, and a
     // resize under the pointer makes the host dismiss the popover instead of showing the hint.
-    const bodyHeight = Math.max(280, Math.min(HOSTED_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.5)));
+    const bodyHeight = Math.max(260, Math.min(hosted ? HOSTED_PICKER_MAX_HEIGHT : MODAL_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.45)));
     if (hosted) return <View style={{ height: bodyHeight }}>{picker}</View>;
     return (
       <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
@@ -72,13 +74,9 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   const visibleProviders = filterTargets(providers, search);
   // One provider at a time as tabs: the whole picker fits one fixed-size body, so nothing scrolls.
   const activeProvider = visibleProviders.find((entry) => entry.id === tab) ?? visibleProviders.find((entry) => entry.id === source.provider) ?? visibleProviders[0];
-  // Show only as many whole rows as the list can hold, so nothing is clipped and nothing scrolls.
-  const [listHeight, setListHeight] = useState(0);
-  const rowHeight = (layout.compact ? 34 : 38) + 2;
+  // Only the model list scrolls; the rest of the body is fixed so the host never resizes or scrolls.
   const total = activeProvider?.models.length ?? 0;
-  const fit = Math.max(1, Math.floor((listHeight - 12) / rowHeight));
-  const capacity = total > fit ? Math.max(1, fit - 1) : total;
-  const shownModels = activeProvider?.models.slice(0, capacity) ?? [];
+  const shownModels = activeProvider?.models.slice(0, RENDER_LIMIT) ?? [];
   const hiddenCount = total - shownModels.length;
   const [selection, setSelection] = useState<{ provider: string; model: string; thinkingOptionId?: string; modeId?: string }>();
   const provider = providers.find((entry) => entry.id === selection?.provider);
@@ -99,7 +97,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   });
   const space = layout.compact ? 8 : 12;
   const styles = {
-    root: { flex: 1, minHeight: 0, gap: space, padding: space },
+    root: { flex: 1, minHeight: 0, gap: 6, padding: space },
     body: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     hint: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
     error: { color: theme.colors.statusWarning, fontSize: layout.compact ? 12 : 13 },
@@ -114,7 +112,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
     railItemActive: { backgroundColor: theme.colors.accent },
     railText: { flexShrink: 1, color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14, fontWeight: "600" as const },
     railTextActive: { color: theme.colors.accentForeground },
-    list: { flex: 1, minWidth: 0, paddingVertical: 6, paddingRight: 6, gap: 2, overflow: "hidden" as const },
+    list: { flex: 1, minWidth: 0, minHeight: 0 },
     option: { height: layout.compact ? 34 : 38, justifyContent: "center" as const, paddingHorizontal: 10, borderRadius: 6 },
     optionSelected: { backgroundColor: theme.colors.surface1 },
     optionText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
@@ -157,7 +155,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
             </Pressable>;
           })}
         </View>
-        <View style={styles.list} onLayout={(event) => setListHeight(event.nativeEvent.layout.height)}>
+        <ScrollView style={styles.list} contentContainerStyle={{ gap: 2, paddingVertical: 6, paddingRight: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
           {query.isPending || discovering ? <Text style={styles.hint}>Loading providers...</Text> : null}
           {query.isError ? <Text style={styles.error}>{String(query.error)}</Text> : null}
           {query.isError ? link("retry", "Retry provider discovery", () => { void query.refetch(); }) : null}
@@ -169,8 +167,8 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
               mutation.reset();
               setSelection({ provider: activeProvider!.id, model: candidate.id, ...defaultSelection(activeProvider!, candidate, source) });
             }))}
-          {hiddenCount > 0 ? <Text style={styles.hint}>+{hiddenCount} more. Search to narrow the list.</Text> : null}
-        </View>
+          {hiddenCount > 0 ? <Text style={styles.hint}>+{hiddenCount} more. Search to narrow.</Text> : null}
+        </ScrollView>
       </View>
       {/* Effort, mode and the Switch button sit below the model grid. */}
       {model && selection ? <View style={{ gap: 4 }}>
