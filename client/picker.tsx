@@ -14,6 +14,7 @@ type PickerSource = SourceTarget & { status: string; cwd: string };
 const HOSTED_PICKER_MAX_HEIGHT = 340;
 const MODAL_PICKER_MAX_HEIGHT = 420;
 const RENDER_LIMIT = 200;
+const RADIUS = 12;
 const DISCOVERY_POLL_MS = 400;
 const DISCOVERY_POLL_LIMIT_MS = 30_000;
 
@@ -69,6 +70,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   useEffect(() => paseo.providers.subscribe(() => { void query.refetch(); }), [paseo, query.refetch]);
   const providers = query.data ? buildTargets(query.data, source) : [];
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [menu, setMenu] = useState<"effort" | "mode" | null>(null);
   const [tab, setTab] = useState<TargetProvider["id"]>();
   const searching = isSearching(search);
@@ -103,30 +105,34 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
     hint: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 12 : 13 },
     error: { color: theme.colors.statusWarning, fontSize: layout.compact ? 12 : 13 },
     searchRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: space },
-    search: { flex: 1, color: theme.colors.foregroundMuted, backgroundColor: theme.colors.surface1, borderRadius: 8,
-      paddingHorizontal: space, paddingVertical: layout.compact ? 6 : 7, fontSize: layout.compact ? 12 : 13 },
+    search: { flex: 1, height: 36, color: theme.colors.foregroundMuted, backgroundColor: theme.colors.surface2, borderRadius: RADIUS,
+      borderWidth: 1, borderColor: searchFocused ? theme.colors.accent : theme.colors.border, paddingHorizontal: 12, paddingVertical: 0,
+      fontSize: layout.compact ? 12 : 13, outlineStyle: "none", outlineWidth: 0 } as never,
     count: { color: theme.colors.foregroundMuted, fontSize: layout.compact ? 11 : 12 },
     panes: { flex: 1, minHeight: 0, flexDirection: "row" as const, gap: space },
     rail: { width: layout.compact ? 116 : 136, gap: 6 },
     railItem: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6,
-      paddingHorizontal: 12, paddingVertical: layout.compact ? 9 : 10, borderRadius: 14, backgroundColor: theme.colors.surface1 },
-    railItemActive: { backgroundColor: theme.colors.accent },
+      height: layout.compact ? 36 : 38, paddingHorizontal: 12, borderRadius: RADIUS, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 },
+    railItemActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
     railText: { flexShrink: 1, color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14, fontWeight: "600" as const },
     railTextActive: { color: theme.colors.accentForeground },
     list: { flex: 1, minWidth: 0, minHeight: 0 },
-    option: { height: layout.compact ? 34 : 38, justifyContent: "center" as const, paddingHorizontal: 12, borderRadius: 14, backgroundColor: theme.colors.surface1 },
-    optionSelected: { backgroundColor: theme.colors.surface1, borderWidth: 1, borderColor: theme.colors.accent },
+    option: { height: layout.compact ? 36 : 38, flexDirection: "row" as const, alignItems: "center" as const, gap: 8, paddingHorizontal: 12, borderRadius: RADIUS,
+      borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 },
+    optionSelected: { borderColor: theme.colors.accent },
     optionText: { color: theme.colors.foreground, fontSize: layout.compact ? 13 : 14 },
     optionTextSelected: { color: theme.colors.accent, fontWeight: "600" as const },
     link: { paddingVertical: space / 2 },
     linkText: { color: theme.colors.accent, fontSize: layout.compact ? 12 : 13, fontWeight: "600" as const },
-    button: { paddingVertical: layout.compact ? 9 : 10, alignItems: "center" as const, backgroundColor: theme.colors.accent, borderRadius: 8, opacity: mutation.isPending || !model ? 0.5 : 1 },
+    button: { height: 40, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: theme.colors.accent,
+      borderRadius: RADIUS, opacity: mutation.isPending || !model ? 0.5 : 1 },
     buttonText: { color: theme.colors.accentForeground, fontSize: layout.compact ? 14 : 15, fontWeight: "600" as const },
   };
   const option = (key: string, label: string, selected: boolean, onPress: () => void) => (
     <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected, disabled: mutation.isPending }}
       accessibilityLabel={label} disabled={mutation.isPending} onPress={onPress} style={[styles.option, selected && styles.optionSelected]}>
-      <Text numberOfLines={1} style={[styles.optionText, selected && styles.optionTextSelected]}>{selected ? "✓ " : ""}{label}</Text>
+      <Text numberOfLines={1} style={[styles.optionText, selected && styles.optionTextSelected, { flex: 1 }]}>{label}</Text>
+      {selected ? <Text style={styles.optionTextSelected}>✓</Text> : null}
     </Pressable>
   );
   const link = (key: string, label: string, onPress: () => void) => (
@@ -140,7 +146,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
       {isRunning(source.status) ? <Text style={styles.error}>This agent is running and will be interrupted.</Text> : null}
       <View style={styles.searchRow}>
         <TextInput accessibilityLabel="Search models" placeholder="Search models" autoCapitalize="none" autoCorrect={false}
-          value={search} onChangeText={setSearch} placeholderTextColor={theme.colors.foregroundMuted} style={styles.search} />
+          value={search} onChangeText={setSearch} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholderTextColor={theme.colors.foregroundMuted} style={styles.search} />
         {searching ? link("clear-search", "Clear search", () => setSearch("")) : null}
       </View>
       <View style={styles.panes}>
@@ -229,8 +235,8 @@ function Dropdown({ label, choices, value, disabled, open, colors, compact, onTo
       ) : null}
       <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${current ? text(current) : "none"}`} accessibilityState={{ expanded: open, disabled }}
         disabled={disabled} onPress={(event) => { event.stopPropagation(); onToggle(); }}
-        style={{ height: 38, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1,
-          borderColor: open ? colors.accent : colors.border, backgroundColor: colors.surface1, opacity: disabled ? 0.5 : 1 }}>
+        style={{ height: 38, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, borderRadius: RADIUS, borderWidth: 1,
+          borderColor: open ? colors.accent : colors.border, backgroundColor: colors.surface2, opacity: disabled ? 0.5 : 1 }}>
         <Text style={{ color: colors.foregroundMuted, fontSize: size - 1 }}>{label}</Text>
         <Text numberOfLines={1} style={{ flex: 1, color: colors.foreground, fontSize: size, fontWeight: "600" }}>{current ? text(current) : "-"}</Text>
         <Text style={{ color: colors.foregroundMuted, fontSize: size - 1 }}>{open ? "▴" : "▾"}</Text>
