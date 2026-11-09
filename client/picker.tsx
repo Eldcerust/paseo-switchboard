@@ -7,6 +7,7 @@ import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { useHostedClient, usePaseo, useRpc } from "./hub-compat";
+import { MENU_ITEM_HEIGHT, menuPlacement, type Frame } from "./menu";
 import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, type Choice, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
@@ -78,6 +79,8 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [menu, setMenu] = useState<"effort" | "mode" | null>(null);
+  // Where the Effort and Mode buttons are, so their menu can be placed from the picker's own frame.
+  const [row, setRow] = useState<Frame>();
   const [tab, setTab] = useState<TargetProvider["id"]>();
   const searching = isSearching(search);
   const visibleProviders = filterTargets(providers, search);
@@ -104,6 +107,8 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
       toast.error(error.message);
     },
   });
+  // The choices of whichever menu is open, without the placeholder a button shows before a model is chosen.
+  const menuOptions = (menu === "effort" ? effortChoices(model) : menu === "mode" ? modeChoices(provider) : []).filter((choice) => choice.label !== "Select a model first");
   const space = layout.compact ? 8 : 12;
   const styles = {
     root: { flex: 1, minHeight: 0, gap: 6, paddingHorizontal: space, paddingBottom: space, paddingTop: 2 },
@@ -136,7 +141,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   };
   const option = (key: string, label: string, selected: boolean, onPress: () => void) => (
     <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected, disabled: mutation.isPending }}
-      accessibilityLabel={label} disabled={mutation.isPending} onPress={onPress} style={[styles.option, selected && styles.optionSelected]}>
+      accessibilityLabel={label} disabled={mutation.isPending} onPress={(event) => { event.stopPropagation(); onPress(); }} style={[styles.option, selected && styles.optionSelected]}>
       <Text numberOfLines={1} style={[styles.optionText, selected && styles.optionTextSelected, { flex: 1 }]}>{label}</Text>
       {selected ? <Text style={styles.optionTextSelected}>✓</Text> : null}
     </Pressable>
@@ -162,7 +167,7 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
             const count = entry.models.length;
             return <Pressable key={entry.id} accessibilityRole="button" accessibilityState={{ selected: active, disabled: mutation.isPending }}
               accessibilityLabel={`${entry.label}, ${count} ${count === 1 ? "model" : "models"}`} disabled={mutation.isPending}
-              onPress={(event) => { event.stopPropagation(); setTab(entry.id); }} style={[styles.railItem, active && styles.railItemActive]}>
+              onPress={(event) => { event.stopPropagation(); setMenu(null); setTab(entry.id); }} style={[styles.railItem, active && styles.railItemActive]}>
               <Text style={[styles.railText, active && styles.railTextActive]} numberOfLines={1}>{entry.label}</Text>
               <Text style={styles.count}>{count}</Text>
             </Pressable>;
@@ -178,34 +183,53 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
             `${candidate.label}${activeProvider!.models.filter((entry) => entry.label === candidate.label).length > 1 ? ` · ${candidate.id}` : ""}${candidate.current ? " (current)" : ""}`,
             selection?.provider === activeProvider!.id && selection.model === candidate.id, () => {
               mutation.reset();
+              setMenu(null);
               setSelection({ provider: activeProvider!.id, model: candidate.id, ...defaultSelection(activeProvider!, candidate, source) });
             }))}
           {hiddenCount > 0 ? <Text style={styles.hint}>+{hiddenCount} more. Search to narrow.</Text> : null}
         </ScrollView>
       </View>
       {/* Effort, mode and the Switch button sit below the model grid. */}
-      <View style={{ flexDirection: "row", gap: 6 }}>
+      <View style={{ flexDirection: "row", gap: 6 }} onLayout={(event) => {
+        const { x, y, width } = event.nativeEvent.layout;
+        setRow((previous) => (previous && previous.x === x && previous.y === y && previous.width === width ? previous : { x, y, width }));
+      }}>
         <Dropdown label="Effort" choices={effortChoices(model)} value={choiceValue(selection?.thinkingOptionId)} open={menu === "effort"}
           disabled={mutation.isPending || !model || !model.thinkingOptions.length} colors={theme.colors} compact={layout.compact}
-          onToggle={() => setMenu((value) => (value === "effort" ? null : "effort"))}
-          onChange={(value) => { setMenu(null); if (selection) setSelection({ ...selection, thinkingOptionId: choiceId(value) }); }} />
+          onToggle={() => setMenu((value) => (value === "effort" ? null : "effort"))} />
         <Dropdown label="Mode" choices={modeChoices(provider)} value={choiceValue(selection?.modeId)} open={menu === "mode"}
           disabled={mutation.isPending || !model} colors={theme.colors} compact={layout.compact}
-          onToggle={() => setMenu((value) => (value === "mode" ? null : "mode"))}
-          onChange={(value) => { setMenu(null); if (selection) setSelection({ ...selection, modeId: choiceId(value) }); }} />
+          onToggle={() => setMenu((value) => (value === "mode" ? null : "mode"))} />
       </View>
       {mutation.isError ? <Text selectable style={styles.error}>{String(mutation.error)}</Text> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Switch now" disabled={mutation.isPending || !model || query.isError}
         onPress={() => mutation.mutate()} style={styles.button}>
         <Text style={styles.buttonText}>{mutation.isPending ? "Switching..." : "Switch now"}</Text>
       </Pressable>
+      {/* The menu is a child of the picker itself, over everything, so it lies inside its parents and gets its touches. */}
+      {menu && row && menuOptions.length ? (
+        <>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close menu" onPress={(event) => { event.stopPropagation(); setMenu(null); }}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
+          <ChoiceMenu label={menu === "effort" ? "Effort" : "Mode"} choices={menuOptions}
+            value={menu === "effort" ? choiceValue(selection?.thinkingOptionId) : choiceValue(selection?.modeId)}
+            placement={menuPlacement(row, menuOptions.length)} colors={theme.colors} compact={layout.compact}
+            onChange={(value) => {
+              setMenu(null);
+              if (!selection) return;
+              setSelection(menu === "effort" ? { ...selection, thinkingOptionId: choiceId(value) } : { ...selection, modeId: choiceId(value) });
+            }} />
+        </>
+      ) : null}
     </View>
   );
 }
 
-// Effort and mode are two compact dropdowns side by side. The menu opens upward inside the picker body
-// (not a host popover), so opening it never resizes the surface.
-function Dropdown({ label, choices, value, disabled, open, colors, compact, onToggle, onChange }: {
+const choiceText = (choice: Choice) => (choice.label === "Provider default" ? "Default" : choice.label);
+
+// Effort and mode are two compact buttons side by side. Their menu is not drawn here: it is a child of the
+// picker (see ChoiceMenu), so that it lies inside its parents and gets touches on iOS and Android.
+function Dropdown({ label, choices, value, disabled, open, colors, compact, onToggle }: {
   label: string;
   choices: Choice[];
   value: string;
@@ -214,39 +238,49 @@ function Dropdown({ label, choices, value, disabled, open, colors, compact, onTo
   colors: PluginButtonContentProps["theme"]["colors"];
   compact: boolean;
   onToggle(): void;
-  onChange(value: string): void;
 }) {
-  const options = choices.filter((choice) => choice.label !== "Select a model first");
-  const text = (choice: Choice) => (choice.label === "Provider default" ? "Default" : choice.label);
-  const current = options.find((choice) => choice.value === value);
+  const current = choices.filter((choice) => choice.label !== "Select a model first").find((choice) => choice.value === value);
   const size = compact ? 13 : 14;
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
-      {open && !disabled ? (
-        <View style={{ position: "absolute", left: 0, right: 0, bottom: 44, zIndex: 20, maxHeight: 190, borderRadius: 10, borderWidth: 1,
-          borderColor: colors.border, backgroundColor: colors.surface1, overflow: "hidden" }}>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 4, gap: 2 }}>
-            {options.map((choice) => {
-              const selected = choice.value === value;
-              return (
-                <Pressable key={choice.value} accessibilityRole="button" accessibilityLabel={`${label}: ${choice.label}`}
-                  accessibilityState={{ selected }} onPress={() => onChange(choice.value)}
-                  style={{ height: 34, justifyContent: "center", paddingHorizontal: 10, borderRadius: 6, backgroundColor: selected ? colors.accent : "transparent" }}>
-                  <Text numberOfLines={1} style={{ color: selected ? colors.accentForeground : colors.foreground, fontSize: size }}>{text(choice)}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      ) : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${current ? text(current) : "none"}`} accessibilityState={{ expanded: open, disabled }}
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${current ? choiceText(current) : "none"}`} accessibilityState={{ expanded: open, disabled }}
         disabled={disabled} onPress={(event) => { event.stopPropagation(); onToggle(); }}
         style={{ height: 38, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, borderRadius: RADIUS, borderWidth: 1,
           borderColor: open ? colors.accent : colors.border, backgroundColor: colors.surface2, opacity: disabled ? 0.5 : 1 }}>
         <Text style={{ color: colors.foregroundMuted, fontSize: size - 1 }}>{label}</Text>
-        <Text numberOfLines={1} style={{ flex: 1, color: colors.foreground, fontSize: size, fontWeight: "600" }}>{current ? text(current) : "-"}</Text>
+        <Text numberOfLines={1} style={{ flex: 1, color: colors.foreground, fontSize: size, fontWeight: "600" }}>{current ? choiceText(current) : "-"}</Text>
         <Text style={{ color: colors.foregroundMuted, fontSize: size - 1 }}>{open ? "▴" : "▾"}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+/** The open Effort or Mode menu, placed by menuPlacement above the buttons and drawn over the picker. */
+function ChoiceMenu({ label, choices, value, placement, colors, compact, onChange }: {
+  label: string;
+  choices: Choice[];
+  value: string;
+  placement: ReturnType<typeof menuPlacement>;
+  colors: PluginButtonContentProps["theme"]["colors"];
+  compact: boolean;
+  onChange(value: string): void;
+}) {
+  const size = compact ? 13 : 14;
+  return (
+    <View style={{ position: "absolute", left: placement.left, width: placement.width, top: placement.top, height: placement.height, zIndex: 20,
+      borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface1, overflow: "hidden" }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 4, gap: 2 }}>
+        {choices.map((choice) => {
+          const selected = choice.value === value;
+          return (
+            <Pressable key={choice.value} accessibilityRole="button" accessibilityLabel={`${label}: ${choice.label}`}
+              accessibilityState={{ selected }} onPress={(event) => { event.stopPropagation(); onChange(choice.value); }}
+              style={{ height: MENU_ITEM_HEIGHT, justifyContent: "center", paddingHorizontal: 10, borderRadius: 6, backgroundColor: selected ? colors.accent : "transparent" }}>
+              <Text numberOfLines={1} style={{ color: selected ? colors.accentForeground : colors.foreground, fontSize: size }}>{choiceText(choice)}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
