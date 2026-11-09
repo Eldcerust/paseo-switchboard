@@ -28,6 +28,11 @@ describe("menuPlacement", () => {
     expect(placed.top).toBe(row.y - 6 - MENU_MAX_HEIGHT);
   });
 
+  it("fits a list of seven options without scrolling, which is the longest the providers offer", () => {
+    expect(menuContentHeight(7)).toBeLessThanOrEqual(MENU_MAX_HEIGHT);
+    expect(menuPlacement(row, 7).height).toBe(menuContentHeight(7));
+  });
+
   it("shrinks to the room above the row instead of leaving the picker", () => {
     const placed = menuPlacement({ ...row, y: 100 }, 12);
     expect(placed.top).toBe(0);

@@ -6,7 +6,8 @@ export interface Frame {
 }
 
 export const MENU_ITEM_HEIGHT = 34;
-export const MENU_MAX_HEIGHT = 190;
+/** Tall enough for the longest list the providers offer (about seven options), so a menu does not scroll. */
+export const MENU_MAX_HEIGHT = 260;
 /** The menu's inner padding and the gap between its items. */
 const MENU_PADDING = 4;
 const MENU_ITEM_GAP = 2;

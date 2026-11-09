@@ -7,7 +7,7 @@ import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { useHostedClient, usePaseo, useRpc } from "./hub-compat";
-import { MENU_ITEM_HEIGHT, menuPlacement, type Frame } from "./menu";
+import { MENU_ITEM_HEIGHT, menuContentHeight, menuPlacement, type Frame } from "./menu";
 import { buildTargets, choiceId, choiceValue, defaultSelection, effortChoices, filterTargets, isSearching, modeChoices, type Choice, type SourceTarget, type TargetProvider } from "./targets";
 
 type PickerSource = SourceTarget & { status: string; cwd: string };
@@ -266,21 +266,27 @@ function ChoiceMenu({ label, choices, value, placement, colors, compact, onChang
   onChange(value: string): void;
 }) {
   const size = compact ? 13 : 14;
+  const items = choices.map((choice) => {
+    const selected = choice.value === value;
+    return (
+      <Pressable key={choice.value} accessibilityRole="button" accessibilityLabel={`${label}: ${choice.label}`}
+        accessibilityState={{ selected }} onPress={(event) => { event.stopPropagation(); onChange(choice.value); }}
+        style={{ height: MENU_ITEM_HEIGHT, justifyContent: "center", paddingHorizontal: 10, borderRadius: 6, backgroundColor: selected ? colors.accent : "transparent" }}>
+        <Text numberOfLines={1} style={{ color: selected ? colors.accentForeground : colors.foreground, fontSize: size }}>{choiceText(choice)}</Text>
+      </Pressable>
+    );
+  });
+  // A scroll view only when the options really do not fit. Inside a phone's bottom sheet each one registers with
+  // the sheet as its scrollable, and mounting one every time a menu opens left the sheet reading drags as its own.
+  const scrolls = menuContentHeight(choices.length) > placement.height;
   return (
     <View style={{ position: "absolute", left: placement.left, width: placement.width, top: placement.top, height: placement.height, zIndex: 20,
       borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface1, overflow: "hidden" }}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 4, gap: 2 }}>
-        {choices.map((choice) => {
-          const selected = choice.value === value;
-          return (
-            <Pressable key={choice.value} accessibilityRole="button" accessibilityLabel={`${label}: ${choice.label}`}
-              accessibilityState={{ selected }} onPress={(event) => { event.stopPropagation(); onChange(choice.value); }}
-              style={{ height: MENU_ITEM_HEIGHT, justifyContent: "center", paddingHorizontal: 10, borderRadius: 6, backgroundColor: selected ? colors.accent : "transparent" }}>
-              <Text numberOfLines={1} style={{ color: selected ? colors.accentForeground : colors.foreground, fontSize: size }}>{choiceText(choice)}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {scrolls ? (
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 4, gap: 2 }}>{items}</ScrollView>
+      ) : (
+        <View style={{ padding: 4, gap: 2 }}>{items}</View>
+      )}
     </View>
   );
 }
