@@ -33,8 +33,6 @@ export function createPickerPopover(openScreen: PluginClientContext["openScreen"
       provider: agent.provider, model: agent.model ?? null, currentModeId: agent.currentModeId ?? null,
       status: agent.status, cwd: agent.cwd,
     }));
-    if (!source) return null;
-    const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
     // Keep the body at one size. Collapsing the last provider group shrinks the content, and a
     // resize under the pointer makes the host dismiss the popover instead of showing the hint.
     // Phones get a bottom sheet that runs to the bottom of the screen, so fill what is left under the
@@ -42,6 +40,10 @@ export function createPickerPopover(openScreen: PluginClientContext["openScreen"
     const bodyHeight = layout.compact
       ? Math.max(340, Math.min(PHONE_PICKER_MAX_HEIGHT, windowHeight - HUB_CHROME_HEIGHT))
       : Math.max(280, Math.min(hosted ? HOSTED_PICKER_MAX_HEIGHT : MODAL_PICKER_MAX_HEIGHT, Math.round(windowHeight * 0.5)));
+    // A phone sheet does not re-anchor when its content grows after it opens, so the body claims its
+    // full height from the first render, before the agent record has loaded.
+    if (!source) return hosted ? <View style={{ height: bodyHeight }} /> : null;
+    const picker = <AgentPicker agentId={agentId} source={source} theme={theme} layout={layout} close={close} openScreen={openScreen} />;
     if (hosted) return <View style={{ height: bodyHeight }}>{picker}</View>;
     return (
       <Modal title="Switch provider and model" open onOpenChange={(open) => { if (!open) close(); }}>
