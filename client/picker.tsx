@@ -1,9 +1,9 @@
 import type { PluginButtonContentProps, PluginClientContext } from "@getpaseo/plugin/client";
 import { useAgent } from "@getpaseo/plugin/client";
-import { Modal, ScrollView, TextInput, useToast } from "@getpaseo/plugin/client/ui";
+import { Modal, TextInput, useToast } from "@getpaseo/plugin/client/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { isDiscovering, readCatalog } from "../shared/catalog";
 import { OPEN_AGENT_SCREEN_ID, isRunning, switchRpc } from "../shared/switchboard";
 import { useHostedClient, usePaseo, useRpc } from "./hub-compat";
@@ -89,6 +89,9 @@ function AgentPicker({ agentId, source, theme, layout, close, openScreen }: {
   // One provider at a time as tabs: the whole picker fits one fixed-size body, so nothing scrolls.
   const activeProvider = visibleProviders.find((entry) => entry.id === tab) ?? visibleProviders.find((entry) => entry.id === source.provider) ?? visibleProviders[0];
   // Only the model list scrolls; the rest of the body is fixed so the host never resizes or scrolls.
+  // The list takes the plain React Native ScrollView, not the plugin one: inside a host sheet the
+  // plugin ScrollView becomes that sheet's own scrollable, and the sheet then sizes itself from this
+  // list. That made the sheet's height follow the provider's model count, up on Claude, down on Codex.
   const total = activeProvider?.models.length ?? 0;
   const shownModels = activeProvider?.models.slice(0, RENDER_LIMIT) ?? [];
   const hiddenCount = total - shownModels.length;
@@ -278,8 +281,9 @@ function ChoiceMenu({ label, choices, value, placement, colors, compact, onChang
       </Pressable>
     );
   });
-  // A scroll view only when the options really do not fit. Inside a phone's bottom sheet each one registers with
-  // the sheet as its scrollable, and mounting one every time a menu opens left the sheet reading drags as its own.
+  // A scroll view only when the options really do not fit, and a plain React Native one: the plugin
+  // ScrollView registers with a phone's sheet as its scrollable, which would hand the sheet this
+  // menu's height. Inside a sheet, every one of those leaves drags read as the sheet's own.
   const scrolls = menuContentHeight(choices.length) > placement.height;
   return (
     <View style={{ position: "absolute", left: placement.left, width: placement.width, top: placement.top, height: placement.height, zIndex: 20,
